@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://rpolemxgussziexdmdxe.supabase.co wss://rpolemxgussziexdmdxe.supabase.co; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'">
+    <title>Login - Prime Connect</title>
+    
+    <!-- Production Dependencies -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==">
+    
+    <!-- Tailwind CSS -->
+    <!-- Local Compiled CSS -->
+    <link rel="stylesheet" href="./dist/app.css">
+    <link rel="stylesheet" href="./dist/login.css">
+</head>
+<body class="min-h-screen safe-top safe-bottom">
+    
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-white z-[9999] flex items-center justify-center flex-col hidden">
+        <div class="w-16 h-16 rounded-full border-4 border-brand-200 border-t-brand-600 animate-spin mb-4"></div>
+        <p class="text-slate-600 font-medium">Signing you in...</p>
+    </div>
+    
+    <!-- Back to Home Button -->
+    <div class="absolute top-4 left-4 md:top-6 md:left-6 z-10">
+        <a href="index.html" class="flex items-center text-slate-600 hover:text-brand-600 transition-colors">
+            <i class="fas fa-arrow-left mr-2"></i>
+            <span class="hidden sm:inline">Back to Home</span>
+        </a>
+    </div>
+    
+    <!-- Main Container -->
+    <div class="min-h-screen flex flex-col items-center justify-center p-4 md:p-8">
+        <!-- Logo/Brand Section -->
+        <div class="mb-8 md:mb-12 text-center animate-fadeInUp">
+            <div class="w-16 h-16 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center text-white shadow-lg mx-auto mb-4">
+                <i class="fas fa-bolt text-xl"></i>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-800 mb-2">
+                Welcome to <span class="text-brand-600">PRIME<span class="text-brand-400">CONNECT</span></span>
+            </h1>
+            <p class="text-slate-500 max-w-md mx-auto">Log in to access and manage your data bundles and wallet securely.</p>
+        </div>
+        
+        <!-- Login Card -->
+         <div class="w-full max-w-md animate-fadeInUp anim-delay-1">        
+         </div>
+            <div class="card overflow-hidden border border-slate-200">
+                <div class="p-6 md:p-8">
+                    <!-- Success/Error Messages -->
+                    <div id="message-container" class="space-y-3 mb-6"></div>
+                    
+                    <!-- Login Form -->
+                    <form id="login-form" class="space-y-5">
+                        <!-- Email Input -->
+                        <div>
+                            <label for="email" class="block text-sm font-medium text-slate-700 mb-2">
+                                Email Address <span class="text-red-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i class="fas fa-envelope text-slate-400"></i>
+                                </div>
+                                <input 
+                                    type="email" 
+                                    id="email" 
+                                    required
+                                    class="modern-input w-full pl-10 pr-4 py-3 rounded-lg text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                                    placeholder="you@example.com"
+                                    autocomplete="email"
+                                >
+                            </div>
+                        </div>
+                        
+                        <!-- Password Input -->
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <label for="password" class="block text-sm font-medium text-slate-700">
+                                    Password <span class="text-red-500">*</span>
+                                </label>
+                                <button 
+                                    type="button" 
+                                    onclick="toggleForgotPassword()"
+                                    class="text-xs font-medium text-brand-600 hover:text-brand-700 transition-colors"
+                                >
+                                    Forgot password?
+                                </button>
+                            </div>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i class="fas fa-lock text-slate-400"></i>
+                                </div>
+                                <input 
+                                    type="password" 
+                                    id="password" 
+                                    required
+                                    class="modern-input w-full pl-10 pr-12 py-3 rounded-lg text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                                    placeholder="Enter your password"
+                                    autocomplete="current-password"
+                                >
+                                <button 
+                                    type="button" 
+                                    id="toggle-password" 
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                                >
+                                    <i class="far fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Remember Me Checkbox -->
+                        <div class="flex items-center space-x-3">
+                            <input 
+                                type="checkbox" 
+                                id="remember-me"
+                                class="h-4 w-4 text-brand-600 focus:ring-brand-500 border-slate-300 rounded"
+                            >
+                            <label for="remember-me" class="text-sm text-slate-600">
+                                Remember me 
+                            </label>
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <button 
+                            type="submit" 
+                            id="login-btn"
+                            class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 px-4 rounded-lg transition-colors shadow-lg shadow-brand-200 hover:shadow-brand-300 flex items-center justify-center gap-2 mt-2 active:scale-[0.98] transition-transform"
+                        >
+                            <span id="btn-text">Sign In</span>
+                            <i id="btn-spinner" class="fas fa-circle-notch fa-spin hidden"></i>
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Sign Up Link -->
+                <div class="px-6 py-5 bg-slate-50 border-t border-slate-100 text-center">
+                    <p class="text-sm text-slate-600">
+                        Don't have an account? 
+                        <a href="signup.html" class="text-brand-600 hover:text-brand-700 font-bold">Create Account</a>
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Security Note -->
+            <div class="mt-4 text-center">
+                <p class="text-xs text-slate-500">
+                    <i class="fas fa-shield-alt mr-1"></i>
+             We safeguard your login with advanced end-to-end encryption to ensure your data remains secure.                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Forgot Password Modal — SMS OTP Reset -->
+    <div id="forgot-modal" class="fixed inset-0 z-[999] hidden items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="toggleForgotPassword()"></div>
+        <div class="bg-white rounded-xl w-full max-w-md relative z-10">
+            <div class="p-5 border-b border-slate-100">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-slate-800 text-lg" id="reset-modal-title">Reset Password</h3>
+                    <button onclick="toggleForgotPassword()" class="p-2"><i class="fas fa-times text-slate-500"></i></button>
+                </div>
+            </div>
+
+            <!-- Step 1: Email input -->
+            <div id="reset-step-1" class="p-5 space-y-4">
+                <p class="text-slate-600 text-sm">Enter your registered email and we'll send an OTP to your phone number.</p>
+                <div>
+                    <label for="reset-email" class="block text-sm font-medium text-slate-700 mb-2">Email Address <span class="text-red-500">*</span></label>
+                    <input type="email" id="reset-email"
+                        class="modern-input w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                        placeholder="you@example.com">
+                </div>
+                <div id="reset-message" class="hidden p-3 rounded-lg text-sm"></div>
+                <div class="flex space-x-3 pt-2">
+                    <button onclick="toggleForgotPassword()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium py-3 px-4 rounded-lg transition-colors">Cancel</button>
+                    <button id="send-reset-btn" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                        <span id="reset-btn-text">Send OTP</span>
+                        <i id="reset-spinner" class="fas fa-circle-notch fa-spin hidden"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: OTP + new password -->
+            <div id="reset-step-2" class="hidden p-5 space-y-4">
+                <div class="flex items-center gap-2 text-sm text-green-700 bg-green-50 p-3 rounded-lg">
+                    <i class="fas fa-mobile-alt"></i>
+                    <span id="reset-phone-hint">OTP sent to your phone</span>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">6-Digit OTP <span class="text-red-500">*</span></label>
+                    <input type="text" id="reset-otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
+                        class="modern-input w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 text-center text-xl tracking-widest font-mono"
+                        placeholder="000000">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">New Password <span class="text-red-500">*</span></label>
+                    <input type="password" id="reset-new-password"
+                        class="modern-input w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500"
+                        placeholder="Min. 8 characters">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Confirm New Password <span class="text-red-500">*</span></label>
+                    <input type="password" id="reset-confirm-password"
+                        class="modern-input w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500"
+                        placeholder="Repeat new password">
+                </div>
+                <div id="reset-step2-message" class="hidden p-3 rounded-lg text-sm"></div>
+                <div class="flex space-x-3 pt-2">
+                    <button id="reset-back-btn" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium py-3 px-4 rounded-lg transition-colors">&#8592; Back</button>
+                    <button id="verify-reset-btn" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                        <span id="verify-btn-text">Reset Password</span>
+                        <i id="verify-spinner" class="fas fa-circle-notch fa-spin hidden"></i>
+                    </button>
+                </div>
+                <p class="text-xs text-slate-400 text-center">OTP expires in 5 minutes</p>
+            </div>
+        </div>
+    </div>
+
+<!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:bottom-4 z-50"></div>
+    
+    <!-- WhatsApp Support -->
+    <a href="https://whatsapp.com/channel/0029Vb6y5f76WaKgHSdSR13V" target="_blank" class="fixed bottom-4 right-4 md:bottom-6 md:right-6 w-14 h-14 bg-green-500 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow z-40">
+        <i class="fab fa-whatsapp text-2xl"></i>
+    </a>
+    
+    <script type="module" src="login-main.js"></script>
+</body>
+</html>

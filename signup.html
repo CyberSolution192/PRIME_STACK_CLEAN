@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://rpolemxgussziexdmdxe.supabase.co wss://rpolemxgussziexdmdxe.supabase.co; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'">
+    <title>Create Account - Prime Connect</title>
+    
+    <!-- Production Dependencies -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==">
+    
+    <!-- Tailwind CSS -->
+    <!-- Local Compiled CSS -->
+    <link rel="stylesheet" href="./dist/app.css">
+    <link rel="stylesheet" href="./dist/signup.css">
+   </head>
+    <body class="min-h-screen safe-top safe-bottom">
+    
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-white z-[9999] flex items-center justify-center flex-col hidden">
+        <div class="w-16 h-16 rounded-full border-4 border-brand-200 border-t-brand-600 animate-spin mb-4"></div>
+        <p class="text-slate-600 font-medium">Creating your account...</p>
+    </div>
+    
+    <!-- Back to Home Button -->
+    <div class="absolute top-4 left-4 md:top-6 md:left-6 z-10">
+        <a href="index.html" class="flex items-center text-slate-600 hover:text-brand-600 transition-colors">
+            <i class="fas fa-arrow-left mr-2"></i>
+            <span class="hidden sm:inline">Back to Home</span>
+        </a>
+    </div>
+    
+    <!-- Main Container -->
+    <div class="min-h-screen flex flex-col items-center justify-center p-4 md:p-8">
+        <!-- Logo/Brand Section -->
+        <div class="mb-8 md:mb-12 text-center animate-fadeInUp">
+            <div class="w-16 h-16 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center text-white shadow-lg mx-auto mb-4">
+                <i class="fas fa-bolt text-xl"></i>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-800 mb-2">
+                Join <span class="text-brand-600">PRIME<span class="text-brand-400">CONNECT</span></span>
+            </h1>
+            <p class="text-slate-500 max-w-md mx-auto">Create your account to access and manage your data bundles and wallet securely.</p>
+        </div>
+        
+        <!-- Signup Card -->
+          <div class="w-full max-w-md animate-fadeInUp anim-delay-1">
+                <div class="card overflow-hidden border border-slate-200">
+                <div class="p-6 md:p-8">
+                    <!-- Success/Error Messages -->
+                    <div id="message-container" class="space-y-3 mb-6"></div>
+                    
+                    <!-- Signup Form -->
+                    <form id="signup-form" class="space-y-5">
+                        <!-- Name Input -->
+                        <div>
+                            <label for="fullname" class="block text-sm font-medium text-slate-700 mb-2">
+                                Full Name <span class="text-red-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i class="fas fa-user text-slate-400"></i>
+                                </div>
+                                <input 
+                                    type="text" 
+                                    id="fullname" 
+                                    required
+                                    class="modern-input w-full pl-10 pr-4 py-3 rounded-lg text-slate-800 placeholder-slate-400"
+                                    placeholder="Enter your full name"
+                                    autocomplete="name"
+                                >
+                            </div>
+                        </div>
+                        
+                        <!-- Email Input -->
+                        <div>
+                            <label for="email" class="block text-sm font-medium text-slate-700 mb-2">
+                                Email Address <span class="text-red-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i class="fas fa-envelope text-slate-400"></i>
+                                </div>
+                                <input 
+                                    type="email" 
+                                    id="email" 
+                                    required
+                                    class="modern-input w-full pl-10 pr-4 py-3 rounded-lg text-slate-800 placeholder-slate-400"
+                                    placeholder="you@example.com"
+                                    autocomplete="email"
+                                >
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">We'll use this for account notifications</p>
+                        </div>
+                        
+                        <!-- Phone Input -->
+                        <div>
+                            <label for="phone" class="block text-sm font-medium text-slate-700 mb-2">
+                                Phone Number <span class="text-red-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i class="fas fa-phone text-slate-400"></i>
+                                </div>
+                                <input 
+                                    type="tel" 
+                                    id="phone" 
+                                    required
+                                    maxlength="10"
+                                    class="modern-input w-full pl-10 pr-4 py-3 rounded-lg text-slate-800 placeholder-slate-400 font-mono"
+                                    placeholder="0XXXXXXXXX"
+                                    autocomplete="tel"
+                                >
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">Enter your phone number (e.g., 0249654924)</p>
+                        </div>
+                        
+                        <!-- Password Input -->
+                        <div>
+                            <label for="password" class="block text-sm font-medium text-slate-700 mb-2">
+                                Password <span class="text-red-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i class="fas fa-lock text-slate-400"></i>
+                                </div>
+                                <input 
+                                    type="password" 
+                                    id="password" 
+                                    required
+                                    class="modern-input w-full pl-10 pr-12 py-3 rounded-lg text-slate-800 placeholder-slate-400"
+                                    placeholder="Create a strong password"
+                                    autocomplete="new-password"
+                                >
+                                <button 
+                                    type="button" 
+                                    id="toggle-password" 
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                                >
+                                    <i class="far fa-eye"></i>
+                                </button>
+                            </div>
+                            <!-- Strength bar -->
+                            <div class="mt-2 h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                                <div id="strength-bar" class="strength-bar h-full w-0 bg-slate-300"></div>
+                            </div>
+                            <!-- Requirements checklist -->
+                            <div id="pw-requirements" class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 hidden">
+                                <span class="pw-req" id="req-length"><i class="fas fa-circle-dot"></i>8+ characters</span>
+                                <span class="pw-req" id="req-lower"><i class="fas fa-circle-dot"></i>Lowercase letter</span>
+                                <span class="pw-req" id="req-upper"><i class="fas fa-circle-dot"></i>Uppercase letter</span>
+                                <span class="pw-req" id="req-digit"><i class="fas fa-circle-dot"></i>Number</span>
+                                <span class="pw-req" id="req-symbol"><i class="fas fa-circle-dot"></i>Special character</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Terms Agreement -->
+                        <div class="flex items-start space-x-3 pt-2">
+                            <input 
+                                type="checkbox" 
+                                id="terms" 
+                                required
+                                class="mt-1 h-4 w-4 text-brand-600 focus:ring-brand-500 border-slate-300 rounded"
+                            >
+                            <label for="terms" class="text-sm text-slate-600">
+                                I agree to the 
+                                <a href="Agree to our terms" class="text-brand-600 hover:text-brand-700 font-medium">Terms of Service</a> 
+                                and 
+                                <a href="#" class="text-brand-600 hover:text-brand-700 font-medium">Privacy Policy</a>
+                            </label>
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <button 
+                            type="submit" 
+                            id="signup-btn"
+                            class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 px-4 rounded-lg transition-colors shadow-lg shadow-brand-200 hover:shadow-brand-300 flex items-center justify-center gap-2 mt-2"
+                        >
+                            <span id="btn-text">Create Account</span>
+                            <i id="btn-spinner" class="fas fa-circle-notch fa-spin hidden"></i>
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Already have account -->
+                <div class="px-6 py-5 bg-slate-50 border-t border-slate-100 text-center">
+                    <p class="text-sm text-slate-600">
+                        Already have an account? 
+                        <a href="login.html" class="text-brand-600 hover:text-brand-700 font-bold">Sign In</a>
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Security Note -->
+            <div class="mt-4 text-center">
+                <p class="text-xs text-slate-500">
+                    <i class="fas fa-shield-alt mr-1"></i>
+                     We safeguard your login with advanced end-to-end encryption to ensure your data remains secure.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Features List (for larger screens) -->
+            <div class="hidden lg:block max-w-4xl mx-auto mt-12 animate-fadeInUp anim-delay-2">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="text-center p-4">
+                    <div class="w-12 h-12 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-bolt text-xl"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-800 mb-2">Swift Delivery</h3>
+                    <p class="text-sm text-slate-600">Enjoy fast, reliable delivery of data bundles directly to your mobile device.</p>
+                </div>
+                <div class="text-center p-4">
+                    <div class="w-12 h-12 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-shield-alt text-xl"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-800 mb-2">Secure Payments</h3>
+                    <p class="text-sm text-slate-600">Experience complete peace of mind with bank-grade security on every transaction.</p>
+                </div>
+                <div class="text-center p-4">
+                    <div class="w-12 h-12 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-headset text-xl"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-800 mb-2">24/7 Support</h3>
+                    <p class="text-sm text-slate-600">Our support team is available around the clock to help with any issues.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:bottom-4 z-50"></div>
+    
+    <!-- WhatsApp Support -->
+    <a href="https://wa.me/qr/JBG44FVQDBCGP1" target="_blank" class="fixed bottom-4 right-4 md:bottom-6 md:right-6 w-14 h-14 bg-green-500 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow z-40">
+        <i class="fab fa-whatsapp text-2xl"></i>
+    </a>
+   <script type="module" src="signup-main.js"></script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+ body { font-family: 'Inter', sans-serif; }
+        code, pre { font-family: 'JetBrains Mono', 'Courier New', monospace; }
+
+        /* ── Code blocks ── */
+        .code-block {
+            background: #0f172a;
+            border-radius: 0.75rem;
+            overflow: hidden;
+        }
+        .code-block pre {
+            color: #e2e8f0;
+            font-size: 0.78rem;
+            line-height: 1.75;
+            padding: 1.2rem 1.5rem;
+            margin: 0;
+            overflow-x: auto;
+            white-space: pre;
+        }
+        .ck  { color: #93c5fd; }   /* key   */
+        .cs  { color: #86efac; }   /* string */
+        .cn  { color: #fcd34d; }   /* number */
+        .cc  { color: #475569; }   /* comment */
+        .cm  { color: #f472b6; }   /* method */
+        .ckw { color: #c084fc; }   /* keyword */
+        .cfn { color: #67e8f9; }   /* function */
+
+        /* ── Language tabs ── */
+        .lang-tabs { display: flex; background: #1e293b; border-bottom: 1px solid #334155; }
+        .lang-tab  {
+            padding: 0.45rem 1rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: #64748b;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .lang-tab.active  { color: #93c5fd; border-bottom-color: #93c5fd; }
+        .lang-tab:hover:not(.active) { color: #94a3b8; }
+        .lang-panel       { display: none; }
+        .lang-panel.active{ display: block; }
+        .code-block.tabbed { border-radius: 0.75rem; overflow: hidden; }
+        .code-block.tabbed pre { border-radius: 0; }
+
+        /* ── Sidebar ── */
+        .doc-nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.42rem 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.815rem;
+            color: #475569;
+            transition: all 0.15s;
+            text-decoration: none;
+        }
+        .doc-nav-link:hover  { background: #f1f5f9; color: #0284c7; }
+        .doc-nav-link.active { background: #e0f2fe; color: #0284c7; font-weight: 600; border-left: 3px solid #0284c7; }
+        .nav-label { font-size: 0.68rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; padding: 0 0.75rem; margin-top: 1.1rem; margin-bottom: 0.3rem; }
+
+        /* ── Method badges ── */
+        .badge-post { background: #dbeafe; color: #1d4ed8; font-family: 'JetBrains Mono', monospace; }
+
+        /* ── Endpoint card ── */
+        .ep-card   { background: white; border: 1px solid #e2e8f0; border-radius: 1rem; overflow: hidden; margin-bottom: 2.5rem; }
+        .ep-header { display: flex; align-items: center; gap: 0.65rem; padding: 1rem 1.5rem; border-bottom: 1px solid #f1f5f9; background: #f8fafc; flex-wrap: wrap; }
+
+        /* ── Inline code ── */
+        .ic { background: #f1f5f9; color: #0f172a; padding: 0.1rem 0.4rem; border-radius: 0.25rem; font-size: 0.77rem; font-family: 'JetBrains Mono', monospace; }
+
+        /* ── Tables ── */
+        .dt    { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+        .dt th { background: #f8fafc; color: #475569; font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.6rem 1rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        .dt td { padding: 0.6rem 1rem; border-bottom: 1px solid #f1f5f9; color: #374151; vertical-align: top; }
+        .dt tr:last-child td { border-bottom: none; }
+
+        /* ── Callouts ── */
+        .c-info   { background: #eff6ff; border-left: 4px solid #2563eb; }
+        .c-warn   { background: #fffbeb; border-left: 4px solid #d97706; }
+        .c-danger { background: #fef2f2; border-left: 4px solid #dc2626; }
+
+        .sticky-top { position: sticky; top: 0; z-index: 40; background: white; border-bottom: 1px solid #e2e8f0; }
+        .doc-section { scroll-margin-top: 80px; }
+        html { scroll-behavior: smooth; }
+
+        @media (max-width: 768px) { .doc-sidebar { display: none; } }
+
+        .brand-gradient {
+            background: linear-gradient(to right, #0c4a6e 0%, #0369a1 50%, #0c4a6e 100%);
+        }

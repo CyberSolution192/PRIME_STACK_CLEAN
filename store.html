@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://js.paystack.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://fonts.gstatic.com https://paystack.com; img-src 'self' data: https:; connect-src 'self' https://rpolemxgussziexdmdxe.supabase.co wss://rpolemxgussziexdmdxe.supabase.co https://api.paystack.co https://js.paystack.co; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; frame-src https://checkout.paystack.com; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'">  
+       <title>Buy Data Bundles - Prime Connect</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" href="https://api.faviconkit.com/primeconnect.com/64" type="image/x-icon">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Local Compiled CSS -->
+    <link rel="stylesheet" href="./dist/app.css">
+    <link rel="stylesheet" href="./dist/store.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- ── Site Lock Overlay — must be first in body so it exists when checkStoreLock() runs ── -->
+<div id="storeLockOverlay" class="fixed inset-0 z-[99999] hidden items-center justify-center p-4"
+     class="store-lock-overlay">
+  <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm mx-auto p-8 text-center">
+    <div class="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5"
+         class="store-lock-icon-bg">
+      <i id="storeLockIcon" class="fas fa-clock text-3xl" class="store-lock-blue"></i>
+    </div>
+    <h2 id="storeLockTitle"   class="text-2xl font-bold mb-2" class="store-lock-title">Store Temporarily Closed</h2>
+    <p  id="storeLockMessage" class="mb-6 text-sm leading-relaxed" class="store-lock-message"></p>
+    <div class="inline-flex items-center gap-2 text-sm px-5 py-2 rounded-full"
+         class="store-lock-footer">
+      <i class="fas fa-calendar-alt text-xs"></i>
+      <span id="storeLockFooter">Check back later.</span>
+    </div>
+  </div>
+</div>
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-30" id="siteHeader">
+    <div class="max-w-6xl mx-auto px-4 py-3">
+        <div class="flex items-center justify-between gap-3">
+
+            <!-- Logo + store name -->
+            <div class="flex items-center gap-3 min-w-0">
+                <div id="headerIcon" class="w-10 h-10 rounded-xl tc-bg flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-bolt text-white"></i>
+                </div>
+                <div class="min-w-0">
+                    <h1 class="font-bold text-base leading-tight text-gray-900 truncate" id="storeDisplayTitle">Loading…</h1>
+                    <p class="text-xs text-gray-500 truncate leading-tight mt-0.5" id="storeDisplayTagline"></p>
+                </div>
+            </div>
+
+            <!-- Right controls -->
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <!-- Dark / light toggle — for CUSTOMERS only -->
+                <div class="dm-pill" id="dmPill" onclick="toggleDark()" title="Toggle dark / light mode">
+                    <div class="dm-track"><div class="dm-thumb"></div></div>
+                    <span id="dmLabel">Light</span>
+                </div>
+
+                <button id="trackOrderHeaderBtn" onclick="showTrackOrderPage()"
+                    class="flex items-center gap-1.5 tc-bg-light tc-border tc-text border font-semibold px-3 py-2 rounded-lg text-sm transition-all">
+                    <i class="fas fa-search-location text-xs"></i>
+                    <span class="hidden sm:inline">Track Order</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contact bar — visible only when store owner has set contact info -->
+    <div id="contactBar" class="hidden border-t border-gray-100">
+        <div class="max-w-6xl mx-auto px-4 py-2 flex flex-wrap items-center gap-3">
+            <!-- Support phone -->
+            <a id="contactPhoneLink" href="#"
+                class="hidden items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors">
+                <i class="fas fa-phone text-green-500 text-xs"></i>
+                <span id="contactPhoneText"></span>
+            </a>
+            <!-- WhatsApp support chat -->
+            <a id="contactWaSupport" href="#" target="_blank" rel="noopener noreferrer"
+                class="hidden items-center gap-1.5 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
+                style="background:#25d366; min-height:0">
+                <i class="fab fa-whatsapp text-sm"></i> Contact Support
+            </a>
+            <!-- WhatsApp group -->
+            <a id="contactWaGroup" href="#" target="_blank" rel="noopener noreferrer"
+                class="hidden items-center gap-1.5 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
+                style="background:#128c7e; min-height:0">
+                <i class="fab fa-whatsapp text-sm"></i> Join WhatsApp Group
+            </a>
+        </div>
+    </div>
+</header>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="max-w-6xl mx-auto px-4 py-12">
+        <div class="text-center">
+            <div class="w-16 h-16 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-600">Loading store...</p>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="errorState" class="max-w-6xl mx-auto px-4 py-12 hidden">
+        <div class="text-center">
+            <i class="fas fa-exclamation-triangle text-5xl text-red-500 mb-4"></i>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Store Not Found</h2>
+            <p class="text-gray-600 mb-6">This store link is invalid or has been removed.</p>
+            <a href="signup.html" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-lg">
+                Create Your Own Store
+            </a>
+        </div>
+    </div>
+
+    <!-- Store View -->
+    <div class="store-view" id="storeView">
+    <!-- Main Content -->
+    <main id="mainContent" class="max-w-6xl mx-auto px-4 py-6 hidden">
+        <!-- Banner — themed -->
+        <div id="storeBanner" class="rounded-xl p-6 text-white mb-6"
+            class="store-banner-gradient">
+            <h2 class="text-2xl font-bold mb-1" id="bannerStoreName">Buy Data Bundles</h2>
+            <p class="text-white/80 text-sm" id="bannerTagline">Fast, reliable, and instant delivery to your phone</p>
+        </div>
+
+        <!-- Network Selection -->
+        <div class="mb-8">
+            <h3 class="text-lg font-bold text-gray-700 mb-4">Select Network</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="networkSelection">
+                <button data-network="mtn" class="network-btn bg-white border-2 border-gray-200 rounded-lg p-4 text-left hover:border-blue-500 transition-all">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-12 h-12 rounded-lg mtn-bg flex items-center justify-center font-bold">M</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">MTN</h4>
+                            <p class="text-xs text-gray-500">Best Offers</p>
+                        </div>
+                    </div>
+                </button>
+                <button data-network="airteltigo" class="network-btn bg-white border-2 border-gray-200 rounded-lg p-4 text-left hover:border-blue-500 transition-all">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-12 h-12 rounded-lg airteltigo-bg flex items-center justify-center font-bold">A</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">AirtelTigo</h4>
+                            <p class="text-xs text-gray-500">Big Time</p>
+                        </div>
+                    </div>
+                </button>
+                <button data-network="telecel" class="network-btn bg-white border-2 border-gray-200 rounded-lg p-4 text-left hover:border-blue-500 transition-all">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-12 h-12 rounded-lg telecel-bg flex items-center justify-center font-bold">T</div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Telecel</h4>
+                            <p class="text-xs text-gray-500">Super Speed</p>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- Bundles Container -->
+        <div id="bundlesContainer">
+            <div class="text-center py-12 bg-white rounded-xl border-2 border-dashed border-gray-300">
+                <i class="fas fa-hand-pointer text-3xl text-gray-400 mb-3"></i>
+                <p class="text-gray-500 font-medium">Select a network to view bundles</p>
+            </div>
+        </div>
+    </main>
+    </div><!-- end storeView -->
+
+<!-- Track Order View -->
+<div class="track-view hidden" id="trackView">
+    <div class="max-w-2xl mx-auto px-4 py-8">
+        <!-- Back button -->
+        <button onclick="showStorePage()" class="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium mb-6 transition-colors">
+            <i class="fas fa-arrow-left"></i> Back to Store
+        </button>
+
+        <!-- Track order form card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                        <i class="fas fa-search-location text-lg"></i>
+                    </div>
+                    <h2 class="text-xl font-bold">Track Your Order</h2>
+                </div>
+                <p class="text-blue-100 text-sm">Enter the phone number you used to check your order status</p>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            <i class="fas fa-phone mr-1 text-blue-500"></i>Phone Number
+                        </label>
+                        <input type="tel" id="trackPhone"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg tracking-wider"
+                            placeholder="024xxxxxxx" maxlength="10">
+                        <p class="text-xs text-gray-400 mt-1">The phone number the data bundle was sent to</p>
+                    </div>
+                    <button onclick="trackOrder()" id="trackBtn"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
+                        <i class="fas fa-search"></i> Track Order
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Track Result -->
+        <div id="trackResult" class="hidden"></div>
+
+        <!-- Help tip -->
+        <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-700">
+            <i class="fas fa-info-circle mr-2"></i>
+            Enter the phone number the data bundle was sent to. If you have multiple orders, we'll show all of them.
+        </div>
+    </div>
+</div><!-- end trackView -->
+
+    <!-- Purchase Modal -->
+    <div id="purchaseModal" class="fixed inset-0 z-50 items-center justify-center p-4 hidden">
+        <div class="absolute inset-0 bg-black/50" id="modalBackdrop"></div>
+        <div class="bg-white rounded-xl w-full max-w-md relative z-10">
+            <div class="p-5 border-b border-gray-100 flex justify-between items-center">
+                <h3 class="font-bold text-gray-800 text-lg">Confirm Purchase</h3>
+                <button id="closeModal" class="p-2 text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div id="selectedBundle" class="bg-blue-50 border border-blue-200 rounded-lg p-4"></div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Your Phone Number</label>
+                    <input type="tel" id="recipientPhone" class="w-full px-4 py-3 border border-gray-300 rounded-lg" placeholder="024xxxxxxx" required maxlength="10">
+                    <p class="text-xs text-gray-500 mt-1">Enter your phone number (e.g., 0241234567)</p>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <p class="text-sm text-gray-600">Total Cost</p>
+                        <p id="modalTotal" class="text-2xl font-bold text-gray-800">GH₵ 0.00</p>
+                    </div>
+                    <p class="text-xs text-gray-500">Payment via Mobile Money</p>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-100">
+                <button id="confirmPurchase" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-lg transition-colors">
+                    Proceed to Payment
+                </button>
+            </div>
+        </div>
+    </div>
+ <!-- Paystack Inline -->
+    <script src="https://js.paystack.co/v1/inline.js"></script>
+
+<!-- store-lock-check.js MUST come before the module script so window.__storeLockReady -->
+<!-- is a live Promise by the time the module's setTimeout(0) awaits it.              -->
+<script type="module" src="store-lock-check.js"></script>
+<script type="module" src="store-main.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta http-equiv="Content-Security-Policy"
+       content="
+      default-src 'self';
+      script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://js.paystack.co;
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://fonts.gstatic.com https://paystack.com;
+      img-src 'self' data: https:;
+      connect-src 'self' https://rpolemxgussziexdmdxe.supabase.co wss://rpolemxgussziexdmdxe.supabase.co https://api.paystack.co https://js.paystack.co;
+      font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;
+      frame-src https://checkout.paystack.com;
+      base-uri 'self';
+      form-action 'self';
+      object-src 'none';
+      frame-ancestors 'none';
+      ">
+    <title>Prime Connect - Fast & Reliable Internet Data</title>
+    <meta name="keywords" content="data bundles, Ghana, MTN, AirtelTigo, Telecel, internet data">
+    <!-- Production Dependencies -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==">
+    
+    <!-- Local Compiled CSS -->
+    <link rel="stylesheet" href="./dist/app.css">
+    <link rel="stylesheet" href="./dist/index.css">
+      <script src="https://js.paystack.co/v1/inline.js"></script>
+     </head>
+     <body class="relative min-h-screen safe-top safe-bottom">
+    
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-white z-[9999] flex items-center justify-center flex-col hidden">
+        <div class="w-16 h-16 rounded-full border-4 border-brand-200 border-t-brand-600 animate-spin mb-4"></div>
+        <p class="text-slate-600 font-medium">Processing your order...</p>
+    </div>
+    
+    <!-- Header/Navigation -->
+    <nav class="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-slate-200 safe-top">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center space-x-3">
+                    <a href="#" class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-lg bg-brand-600 flex items-center justify-center">
+                            <i class="fas fa-bolt text-white"></i>
+                        </div>
+                        <div>
+                            <h1 class="font-bold text-lg"><span class="text-brand-400">PRIME</span></h1>
+                            <p class="text-xs text-slate-500">CONNECT</p>
+                        </div>
+                    </a>
+                </div>
+                
+                <!-- Navigation Links -->
+                <div class="flex items-center space-x-4">
+                    <a href="#features" class="hidden md:block text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors">
+                        Features
+                    </a>
+                    <a href="#pricing" class="hidden md:block text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors">
+                        Pricing
+                    </a>
+                    <a href="#how-it-works" class="hidden md:block text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors">
+                        How it Works
+                    </a>
+                    <a href="login.html" class="text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors px-4 py-2">
+                        Login
+                    </a>
+                    <button onclick="app.openTrackModal()"
+                        class="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 border border-brand-300 hover:bg-brand-50 px-3 py-2 rounded-lg transition-colors">
+                        <i class="fas fa-search-location text-xs"></i>
+                        Track Order
+                    </button>
+                   <a
+  href="signup.html"
+  class="bg-brand-600 hover:bg-brand-700 text-white font-medium
+         text-sm sm:text-base
+         px-3 py-2 sm:px-4 sm:py-2.5
+         rounded-lg transition-colors shadow-lg shadow-brand-200"
+         >
+          Get Started
+         </a>
+
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- ══════════════════════════════════════════════════════════════
+         HERO SECTION                        │
+         └─────────────────────────────────────────────────────────────┘
+    ════════════════════════════════════════════════════════════════ -->
+    <section class="hero-section">
+
+        <!-- ══ HERO BACKGROUND IMAGE — ══ -->
+        <img
+            class="hero-bg-img"
+            src="https://i.pinimg.com/originals/d0/de/52/d0de52a002d6d40f3d5bd49c4790caf6.jpg"
+            alt=""
+            aria-hidden="true"
+            loading="eager"
+            onerror="this.style.display='none'"
+        />
+        <!-- Dark overlay keeps text readable over any image -->
+        <div class="hero-bg-overlay"></div>
+
+        <!-- Subtle grid on top -->
+        <div class="hero-grid"></div>
+
+        <!-- ══ HERO CONTENT ══ -->
+        <div class="hero-content max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28">
+            <div class="text-center max-w-3xl mx-auto">
+
+                <!-- Animated badge -->
+                <div class="hero-animate hero-animate-1 flex justify-center mb-7">
+                    <span class="hero-badge">
+                        <span class="hero-badge-dot"></span>
+                        Ghana's Trusted Data Provider
+                    </span>
+                </div>
+
+                <!-- Headline -->
+                <h1 class="hero-headline hero-animate hero-animate-2 mb-5">
+                    Welcome to<br>
+                    <span class="hero-headline-accent">Prime Connect</span><br>
+                    Data Services
+                </h1>
+
+                <!-- Sub-headline -->
+                <p class="hero-sub hero-animate hero-animate-3 mb-4">
+                    Flexible &amp; Durable Data Plans For All Networks
+                </p>
+
+                <!-- Network pills -->
+                <div class="hero-animate hero-animate-3 flex items-center justify-center gap-2 flex-wrap mb-10">
+                    <span class="net-pill"><span class="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block"></span> MTN</span>
+                    <span class="net-pill"><span class="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"></span> AirtelTigo</span>
+                    <span class="net-pill"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span> Telecel</span>
+                </div>
+
+                <!-- CTA Buttons -->
+                <div class="hero-animate hero-animate-4 flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
+                    <a href="signup.html" class="btn-primary-hero w-full sm:w-auto">
+                        <i class="fas fa-user-plus text-sm"></i>
+                        Create Account
+                    </a>
+                    <a href="#buy-section" class="btn-secondary-hero w-full sm:w-auto">
+                        <i class="fas fa-shopping-cart text-sm"></i>
+                        Buy as Guest
+                    </a>
+                    <a href="https://wa.me/qr/JBG44FVQDBCGP1?text=Hello%2C%20I%20want%20to%20become%20an%20Agent" target="_blank" rel="noopener noreferrer" class="btn-agent-hero w-full sm:w-auto">
+                        <i class="fas fa-store text-sm"></i>
+                        Become an Agent
+                    </a>
+                </div>
+
+                <!-- Trust strip -->
+                <div class="hero-animate hero-animate-5 trust-strip">
+                    <div class="trust-item">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Secure Payments</span>
+                    </div>
+                    <div class="trust-item">
+                        <i class="fas fa-bolt"></i>
+                        <span>Instant Delivery</span>
+                    </div>
+                    <div class="trust-item">
+                        <i class="fas fa-headset"></i>
+                        <span>24/7 Support</span>
+                    </div>
+                    <div class="trust-item">
+                        <i class="fas fa-lock"></i>
+                        <span>Powered by Paystack</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Bottom fade transition into next section -->
+        <div class="hero-bottom-fade"></div>
+    </section>
+    
+    <!-- ── Track Order Bar ─────────────────────────────────────────────────── -->
+    <section class="bg-white border-b border-slate-200 py-5 shadow-sm">
+        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col sm:flex-row items-center gap-3">
+                <!-- Label -->
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <div class="w-9 h-9 rounded-lg bg-brand-50 border border-brand-200 flex items-center justify-center">
+                        <i class="fas fa-search-location text-brand-600 text-sm"></i>
+                    </div>
+                    <span class="font-semibold text-slate-700 text-sm whitespace-nowrap">Track Your Order</span>
+                </div>
+                <!-- Divider (desktop) -->
+                <div class="hidden sm:block h-6 w-px bg-slate-200"></div>
+                <!-- Input + Button -->
+                <div class="flex w-full gap-2">
+                    <input
+                        id="quick-track-input"
+                        type="text"
+                        placeholder="Enter phone number or order reference (e.g. GST-xxxxx)"
+                        class="flex-1 px-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400 min-h-0"
+                        style="min-height: unset; height: 42px;"
+                        onkeypress="if(event.key==='Enter') quickTrack()"
+                    />
+                    <button
+                        onclick="quickTrack()"
+                        class="flex-shrink-0 bg-brand-600 hover:bg-brand-700 text-white font-semibold text-sm px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2"
+                        style="height: 42px; min-height: unset;">
+                        <i class="fas fa-search text-xs"></i>
+                        <span class="hidden xs:inline">Track</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Buy Section -->
+    <section id="buy-section" class="py-16 md:py-24 bg-slate-50">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="card overflow-hidden">
+                <div class="p-6 md:p-8">
+                    <div class="text-center mb-10">
+                        <h2 class="text-2xl md:text-3xl font-bold text-slate-800 mb-3">Buy Data Bundle</h2>
+                        <p class="text-slate-600">Select your network and choose from available bundles</p>
+                    </div>
+                    
+                    <!-- Network Selection -->
+                    <div class="mb-10">
+                        <h3 class="text-lg font-bold text-slate-700 mb-4">Select Network</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <button 
+                                onclick="app.loadBundles('mtn', this)" 
+                                class="network-btn network-card p-5 text-left hover:border-brand-500 transition-colors"
+                            >
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="w-12 h-12 rounded-lg mtn-bg flex items-center justify-center font-bold">
+                                        M
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-slate-800">MTN</h4>
+                                        <p class="text-xs text-slate-500">Best Offers</p>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-slate-500 flex items-center">
+                                    <i class="fas fa-check-circle text-green-500 mr-1"></i>
+                                    14+ bundles available
+                                </div>
+                            </button>
+                            
+                            <button 
+                                onclick="app.loadBundles('airteltigo', this)" 
+                                class="network-btn network-card p-5 text-left hover:border-brand-500 transition-colors"
+                            >
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="w-12 h-12 rounded-lg airteltigo-bg flex items-center justify-center text-white font-bold">
+                                        A
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-slate-800">AirtelTigo</h4>
+                                        <p class="text-xs text-slate-500">Big Time</p>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-slate-500 flex items-center">
+                                    <i class="fas fa-check-circle text-green-500 mr-1"></i>
+                                    9+ bundles available
+                                </div>
+                            </button>
+                            
+                            <button 
+                                onclick="app.loadBundles('telecel', this)" 
+                                class="network-btn network-card p-5 text-left hover:border-brand-500 transition-colors"
+                            >
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="w-12 h-12 rounded-lg telecel-bg flex items-center justify-center text-white font-bold">
+                                        T
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-slate-800">Telecel</h4>
+                                        <p class="text-xs text-slate-500">Super Speed</p>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-slate-500 flex items-center">
+                                    <i class="fas fa-check-circle text-green-500 mr-1"></i>
+                                    7+ bundles available
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Bundles Container -->
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-700 mb-4">Available Bundles</h3>
+                        <div id="bundles-container" class="min-h-[300px]">
+                            <div class="text-center py-16 bg-slate-50 rounded-xl border-2 border-dashed border-slate-300">
+                                <i class="fas fa-hand-pointer text-4xl text-slate-400 mb-4"></i>
+                                <p class="text-slate-500 font-medium">Select a network to view bundles</p>
+                                <p class="text-slate-400 text-sm mt-2">Click any network card above</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- How It Works -->
+    <section id="how-it-works" class="py-16 md:py-24 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl md:text-4xl font-bold text-slate-800 mb-4">How It Works</h2>
+                <p class="text-slate-600 max-w-2xl mx-auto">Get your data bundle in 3 simple steps</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Step 1 -->
+                <div class="relative">
+                    <div class="flex flex-col items-center text-center">
+                        <div class="w-16 h-16 rounded-full bg-brand-600 text-white flex items-center justify-center text-xl font-bold mb-4">
+                            1
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-800 mb-3">Select Bundle</h3>
+                        <p class="text-slate-600">Choose your preferred network and data bundle</p>
+                    </div>
+                    <div class="hidden md:block absolute top-8 left-full w-full h-0.5 bg-slate-200 -translate-x-1/2"></div>
+                </div>
+                
+                <!-- Step 2 -->
+                <div class="relative">
+                    <div class="flex flex-col items-center text-center">
+                        <div class="w-16 h-16 rounded-full bg-brand-600 text-white flex items-center justify-center text-xl font-bold mb-4">
+                            2
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-800 mb-3">Make Payment</h3>
+                        <p class="text-slate-600">Pay securely via Mobile Money</p>
+                    </div>
+                    <div class="hidden md:block absolute top-8 left-full w-full h-0.5 bg-slate-200 -translate-x-1/2"></div>
+                </div>
+                
+                <!-- Step 3 -->
+                <div>
+                    <div class="flex flex-col items-center text-center">
+                        <div class="w-16 h-16 rounded-full bg-brand-600 text-white flex items-center justify-center text-xl font-bold mb-4">
+                            3
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-800 mb-3">Receive Data</h3>
+                        <p class="text-slate-600">Get instant confirmation and data delivery</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- ══════════════════════════════════════════════════════════════
+         CTA SECTION  (Get Started Now → Buy as Guest)
+         └─────────────────────────────────────────────────────────────┘
+    ════════════════════════════════════════════════════════════════ -->
+    <section class="cta-section">
+
+        <!-- ══ CTA BACKGROUND IMAGE —  ══ -->
+        <img
+            class="cta-bg-img"
+            src="https://d1eipm3vz40hy0.cloudfront.net/images/Customer+Stories+/MTN_Ghana/MTN_Ghana_team.png"
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            onerror="this.style.display='none'"
+        />
+        <!-- Dark overlay keeps text readable over any image -->
+        <div class="cta-bg-overlay"></div>
+
+        <!-- Subtle grid on top -->
+        <div class="cta-grid"></div>
+
+        <!-- Content -->
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+
+            <!-- Stats row -->
+            <div class="flex items-stretch justify-center gap-3 flex-wrap mb-12">
+                <div class="stat-pill">
+                    <div class="stat-pill-number">10K+</div>
+                    <div class="stat-pill-label">Happy Customers</div>
+                </div>
+                <div class="stat-pill">
+                    <div class="stat-pill-number">3</div>
+                    <div class="stat-pill-label">Networks Covered</div>
+                </div>
+                <div class="stat-pill">
+                    <div class="stat-pill-number">24/7</div>
+                    <div class="stat-pill-label">Support Available</div>
+                </div>
+                <div class="stat-pill">
+                    <div class="stat-pill-number">99%</div>
+                    <div class="stat-pill-label">Delivery Success</div>
+                </div>
+            </div>
+
+            <!-- Headline -->
+            <div class="text-center mb-4">
+                <span class="hero-badge mb-5 inline-flex">
+                    <span class="hero-badge-dot"></span>
+                    Join thousands of satisfied users
+                </span>
+            </div>
+            <h2 class="text-3xl md:text-4xl font-extrabold text-white text-center mb-4 leading-tight">
+                Get Started <span class="hero-headline-accent">Now</span>
+            </h2>
+            <p class="text-slate-300 text-center mb-10 max-w-2xl mx-auto leading-relaxed">
+                Become part of a growing community of satisfied customers accessing dependable and cost-effective data bundles. Sign up today and experience smarter savings.
+            </p>
+
+            <!-- CTA Buttons -->
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10">
+                <a href="signup.html" class="btn-primary-hero w-full sm:w-auto">
+                    <i class="fas fa-user-plus text-sm"></i>
+                    Create Free Account
+                </a>
+                <a href="#buy-section" class="btn-secondary-hero w-full sm:w-auto">
+                    <i class="fas fa-shopping-cart text-sm"></i>
+                    Buy as Guest
+                </a>
+                <a href="https://wa.me/qr/JBG44FVQDBCGP1?text=Hello%2C%20I%20want%20to%20become%20an%20Agent" target="_blank" rel="noopener noreferrer" class="btn-agent-hero w-full sm:w-auto">
+                    <i class="fas fa-store text-sm"></i>
+                    Become an Agent
+                </a>
+            </div>
+
+            <!-- Fine print trust note -->
+            <p class="text-center text-slate-400 text-xs">
+                <i class="fas fa-lock mr-1 text-slate-500"></i>
+                No hidden fees &nbsp;·&nbsp; Instant data delivery &nbsp;·&nbsp; Secure payments via Paystack
+            </p>
+
+        </div>
+    </section>
+    
+    <!-- Footer -->
+    <footer class="bg-slate-900 text-slate-400 py-12 px-4 safe-bottom">
+        <div class="max-w-7xl mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <!-- Company Info -->
+                <div>
+                    <div class="flex items-center space-x-3 mb-4">
+                        <div class="w-10 h-10 rounded-lg bg-brand-600 flex items-center justify-center">
+                            <i class="fas fa-bolt text-white"></i>
+                        </div>
+                        <div>
+                            <h1 class="font-bold text-lg text-white">PRIME<span class="text-brand-400">CONNECT</span></h1>
+                            <p class="text-xs text-slate-500"></p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-slate-400">
+                       The leading platform in Ghana for cost-effective data bundles. We provide fast delivery, secure transactions, and reliable customer service you can count on.
+                    </p>
+                </div>
+                
+                <!-- Quick Links -->
+                <div>
+                    <h3 class="text-white font-bold mb-4">Quick Links</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="#buy-section" class="hover:text-white transition-colors">Buy Data</a></li>
+                        <li><a href="login.html" class="hover:text-white transition-colors">Login</a></li>
+                        <li><a href="signup.html" class="hover:text-white transition-colors">Register</a></li>
+                        <li><a href="#how-it-works" class="hover:text-white transition-colors">How it Works</a></li>
+                    </ul>
+                </div>
+                
+                <!-- Support -->
+                <div>
+                    <h3 class="text-white font-bold mb-4">Support</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="https://wa.me/qr/JBG44FVQDBCGP1" target="_blank" class="hover:text-white transition-colors">
+                            <i class="fab fa-whatsapp mr-2"></i> WhatsApp Support
+                        </a></li>
+                        <li><a href="/cdn-cgi/l/email-protection#c7b4b2b7b7a8b5b387b7b5aeaaa2a4a8a9a9a2a4b3e9a4a8aa" class="hover:text-white transition-colors">
+                            <i class="fas fa-envelope mr-2"></i> Email Support
+                        </a></li>
+                        <li><a href="#" onclick="app.openTrackModal()" class="hover:text-white transition-colors">
+                            <i class="fas fa-truck mr-2"></i> Track Order
+                        </a></li>
+                    </ul>
+                </div>
+                
+                <!-- Contact -->
+                <div>
+                    <h3 class="text-white font-bold mb-4">Contact Info</h3>
+                    <div class="space-y-2 text-sm">
+                        <p><i class="fas fa-phone mr-2"></i> +233 54 871 2699</p>
+                        <p><i class="fas fa-clock mr-2"></i> 24/7 Support Available</p>
+                        <p><i class="fas fa-map-marker-alt mr-2"></i> Akuse, Ghana</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="border-t border-slate-800 mt-8 pt-8 text-center text-sm">
+                <p>&copy; 2025 Prime Connect. All rights reserved.</p>
+                <p class="text-slate-500 mt-2">Secure payments powered by Paystack</p>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Order Modal -->
+    <div id="order-modal" class="fixed inset-0 z-[999] hidden items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" id="modal-backdrop"></div>
+        <div class="bg-white rounded-xl w-full max-w-md relative z-10 animate-slide-up">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-slate-800 text-lg">Complete Your Order</h3>
+                <button onclick="app.closeModal()" class="p-2">
+                    <i class="fas fa-times text-slate-500"></i>
+                </button>
+            </div>
+            
+            <div class="p-5 space-y-4">
+                <div id="selected-bundle-container"></div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Recipient Phone Number</label>
+                    <input 
+                        type="tel" 
+                        id="recipient-phone" 
+                        class="modern-input w-full px-4 py-3 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" 
+                        placeholder="024XXXXXXX"
+                    >
+                    <p class="text-xs text-slate-500 mt-1">Enter the phone number to receive the data bundle</p>
+                </div>
+
+                <!-- Payment Method Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Payment Method</label>
+                    <select 
+                        id="payment-method" 
+                        class="modern-input w-full px-4 py-3 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                    >
+                        <option value="mtn">MTN Mobile Money</option>
+                        <option value="airteltigo">AirtelTigo Money</option>
+                        <option value="telecel">Telecel Cash</option>
+                    </select>
+                </div>
+                
+                <div class="flex justify-between items-center pt-4 border-t border-slate-100">
+                    <div>
+                        <p class="text-sm text-slate-500">Total Cost</p>
+                        <p id="modal-total" class="text-2xl font-bold text-slate-800">GH₵ 0.00</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm text-slate-500">Delivery</p>
+                        <p class="text-sm font-medium text-green-600">Instant</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-5 border-t border-slate-100">
+                <button 
+                    id="checkout-btn" 
+                    class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Pay with Mobile Money
+                </button>
+                <p class="text-xs text-slate-500 text-center mt-3">
+                    <i class="fas fa-lock mr-1"></i>
+                    Secure payment powered by Paystack
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Track Order Modal -->
+    <div id="track-modal" class="fixed inset-0 z-[999] hidden items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" id="track-modal-backdrop"></div>
+        <div class="bg-white rounded-xl w-full max-w-sm relative z-10 animate-slide-up">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-slate-800 text-lg">Track Order</h3>
+                <button onclick="app.closeTrackModal()" class="p-2">
+                    <i class="fas fa-times text-slate-500"></i>
+                </button>
+            </div>
+            
+            <div class="p-5 space-y-4">
+                <p class="text-slate-600">Enter your order reference or phone number to track your order status.</p>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Order Reference / Phone</label>
+                    <input 
+                        type="text" 
+                        id="track-input" 
+                        class="modern-input w-full px-4 py-3 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" 
+                        placeholder="Order ID or 024XXXXXXX"
+                    >
+                </div>
+                
+                <div id="track-result" class="hidden"></div>
+            </div>
+            
+            <div class="p-5 border-t border-slate-100">
+                <button 
+                    onclick="app.performTrack()"
+                    class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                >
+                    Track Order
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+    
+    <!-- WhatsApp Button -->
+    <a href="https://whatsapp.com/channel/0029Vb6y5f76WaKgHSdSR13V" target="_blank" class="fixed bottom-20 right-4 md:bottom-6 md:right-6 w-14 h-14 bg-green-500 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow z-40">
+        <i class="fab fa-whatsapp text-2xl"></i>
+    </a>
+    
+    <!-- Supabase JavaScript -->    
+<!-- Paystack key is loaded from configuration file -->    
+
+    <!-- Application Script -->
+    <script type="module" src="index-main.js"></script>
+</body>
+</html>

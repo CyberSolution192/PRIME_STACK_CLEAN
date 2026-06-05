@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'">
+    <title>Prime Connect Developer API — Documentation</title>
+    <meta name="description" content="Integrate data bundle purchases into your own website using the Prime Connect Developer API." />
+    <!-- Local Compiled CSS -->
+    <link rel="stylesheet" href="./dist/app.css">
+    <link rel="stylesheet" href="./dist/api-docs.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" /> 
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<header class="sticky-top">
+    <div class="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <a href="dashboard.html" class="flex items-center gap-1.5 text-slate-500 hover:text-brand-600 transition-colors text-sm">
+                <i class="fas fa-arrow-left text-xs"></i> Dashboard
+            </a>
+            <span class="text-slate-200">|</span>
+            <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 bg-brand-600 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-code text-white text-xs"></i>
+                </div>
+                <span class="font-bold text-slate-800 text-sm">Prime Connect</span>
+                <span class="text-slate-400 text-sm">Developer API</span>
+            </div>
+        </div>
+        <span class="hidden md:inline-flex items-center gap-1.5 text-xs text-green-600 font-medium bg-green-50 px-2.5 py-1.5 rounded-full">
+            <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse inline-block"></span>
+            API Operational
+        </span>
+    </div>
+</header>
+
+<div class="max-w-7xl mx-auto px-4 md:px-6 py-8 flex gap-8">
+
+    <!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
+    <aside class="doc-sidebar w-52 flex-shrink-0">
+        <nav class="sticky top-24 space-y-0.5">
+            <p class="nav-label">Getting Started</p>
+            <a href="#overview"       class="doc-nav-link"><i class="fas fa-home w-4 text-center text-xs"></i> Overview</a>
+            <a href="#authentication" class="doc-nav-link"><i class="fas fa-key w-4 text-center text-xs"></i> Authentication</a>
+            <a href="#base-url"       class="doc-nav-link"><i class="fas fa-link w-4 text-center text-xs"></i> Base URL</a>
+            <a href="#rate-limits"    class="doc-nav-link"><i class="fas fa-tachometer-alt w-4 text-center text-xs"></i> Rate Limits</a>
+            <a href="#errors"         class="doc-nav-link"><i class="fas fa-exclamation-circle w-4 text-center text-xs"></i> Errors</a>
+
+            <p class="nav-label">Endpoints</p>
+            <a href="#ep-balance"      class="doc-nav-link"><i class="fas fa-wallet w-4 text-center text-xs"></i> Check Balance</a>
+            <a href="#ep-order"        class="doc-nav-link"><i class="fas fa-shopping-cart w-4 text-center text-xs"></i> Make Order</a>
+            <a href="#ep-status"       class="doc-nav-link"><i class="fas fa-search w-4 text-center text-xs"></i> Order Status</a>
+            <a href="#ep-bundles"      class="doc-nav-link"><i class="fas fa-layer-group w-4 text-center text-xs"></i> Get Bundles</a>
+            <a href="#ep-transactions" class="doc-nav-link"><i class="fas fa-history w-4 text-center text-xs"></i> Transactions</a>
+
+            <p class="nav-label">Guides</p>
+            <a href="#best-practices" class="doc-nav-link"><i class="fas fa-shield-alt w-4 text-center text-xs"></i> Best Practices</a>
+        </nav>
+    </aside>
+
+    <!-- ── Main ─────────────────────────────────────────────────────────────── -->
+    <main class="flex-1 min-w-0 max-w-3xl">
+
+        <!-- Overview -->
+        <section id="overview" class="doc-section mb-12">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-code text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900 leading-tight">Prime Connect Developer API</h1>
+                    <p class="text-sm text-slate-500">Simple, powerful, and reliable data bundle integration</p>
+                </div>
+            </div>
+            <p class="text-slate-600 leading-relaxed mb-6">
+                The Prime Connect Developer API lets you integrate data bundle purchases directly into your own website or application.
+                Your customers pay you — you call our API — we deliver the data to their phone. Your wallet is automatically
+                charged for each successful order.
+            </p>
+            <div class="flex flex-wrap gap-2 mb-6">
+                <span class="inline-flex items-center gap-1.5 text-xs font-medium bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full"><i class="fas fa-bolt"></i> Fast Integration</span>
+                <span class="inline-flex items-center gap-1.5 text-xs font-medium bg-green-50 text-green-700 px-3 py-1.5 rounded-full"><i class="fas fa-shield-alt"></i> Secure</span>
+                <span class="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-50 text-amber-700 px-3 py-1.5 rounded-full"><i class="fas fa-wallet"></i> Wallet-Based</span>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl p-5 mb-4">
+                <h3 class="font-semibold text-slate-800 mb-4 text-sm">Get Started in 3 Steps</h3>
+                <div class="space-y-3">
+                    <div class="flex gap-3 items-start">
+                        <div class="w-6 h-6 bg-brand-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</div>
+                        <div><p class="text-sm font-medium text-slate-800">Get Your API Key</p><p class="text-xs text-slate-500">Go to Dashboard → API Access and generate your personal key</p></div>
+                    </div>
+                    <div class="flex gap-3 items-start">
+                        <div class="w-6 h-6 bg-brand-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</div>
+                        <div><p class="text-sm font-medium text-slate-800">Top Up Your Wallet</p><p class="text-xs text-slate-500">Fund your wallet on the dashboard — each API order deducts automatically</p></div>
+                    </div>
+                    <div class="flex gap-3 items-start">
+                        <div class="w-6 h-6 bg-brand-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</div>
+                        <div><p class="text-sm font-medium text-slate-800">Make Your First Request</p><p class="text-xs text-slate-500">Use the examples below to place your first data bundle order</p></div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Authentication -->
+        <section id="authentication" class="doc-section mb-12">
+            <h2 class="text-xl font-bold text-slate-900 mb-3">Authentication</h2>
+            <p class="text-slate-600 text-sm mb-4">Every request must include your API key in the <span class="ic">X-API-Key</span> header. No session, no login flow.</p>
+            <div class="code-block mb-4"><pre><span class="cc"># Include this header in every request</span>
+<span class="ck">X-API-Key</span>: <span class="cs">pk_live_your_api_key_here</span></pre></div>
+            <div class="c-danger rounded-xl p-4 mb-3">
+                <p class="text-sm text-red-800"><i class="fas fa-exclamation-triangle mr-2"></i><strong>Server-side only.</strong> Never expose your API key in frontend JavaScript, mobile apps, or public repositories. All calls must be made from your backend server.</p>
+            </div>
+            <div class="c-warn rounded-xl p-4">
+                <p class="text-sm text-amber-800"><i class="fas fa-info-circle mr-2"></i>Your key starts with <span class="ic">pk_live_</span> and is shown <strong>only once</strong> when generated. Store it securely immediately. If lost, revoke it and generate a new one from Dashboard → API Access.</p>
+            </div>
+        </section>
+
+        <!-- Base URL -->
+        <section id="base-url" class="doc-section mb-12">
+            <h2 class="text-xl font-bold text-slate-900 mb-3">Base URL</h2>
+            <p class="text-slate-600 text-sm mb-3">All requests are <span class="ic">POST</span> to this base URL:</p>
+            <div class="code-block mb-4"><pre><span class="cs">https://primeconnect.site/api/</span></pre></div>
+            <p class="text-slate-600 text-sm mb-3">Append the endpoint name to the base URL for each request. Full examples:</p>
+            <div class="code-block"><pre><span class="cc"># Check balance</span>
+<span class="cm">POST</span> <span class="cs">https://primeconnect.site/api/api-balance</span>
+
+<span class="cc"># Place an order</span>
+<span class="cm">POST</span> <span class="cs">https://primeconnect.site/api/api-order</span>
+
+<span class="cc"># Check order status</span>
+<span class="cm">POST</span> <span class="cs">https://primeconnect.site/api/api-order-status</span>
+
+<span class="cc"># Get available bundles</span>
+<span class="cm">POST</span> <span class="cs">https://primeconnect.site/api/api-get-bundles</span>
+
+<span class="cc"># Get transaction history</span>
+<span class="cm">POST</span> <span class="cs">https://primeconnect.site/api/api-get-transactions</span></pre></div>
+        </section>
+
+        <!-- Rate Limits -->
+        <section id="rate-limits" class="doc-section mb-12">
+            <h2 class="text-xl font-bold text-slate-900 mb-3">Rate Limits</h2>
+            <p class="text-slate-600 text-sm mb-4">Limits are per API key using a rolling 60-second window. Exceeding the limit returns <span class="ic">429</span> with a <span class="ic">retry_after_seconds</span> field.</p>
+            <div class="bg-white border border-slate-200 rounded-xl overflow-hidden mb-4">
+                <table class="dt">
+                    <thead><tr><th>Endpoint</th><th>Limit</th><th>Window</th></tr></thead>
+                    <tbody>
+                        <tr><td><span class="ic">api-balance</span></td><td class="font-semibold">60 requests</td><td class="text-slate-500">Per minute</td></tr>
+                        <tr><td><span class="ic">api-order</span></td><td class="font-semibold">30 requests</td><td class="text-slate-500">Per minute</td></tr>
+                        <tr><td><span class="ic">api-order-status</span></td><td class="font-semibold">60 requests</td><td class="text-slate-500">Per minute</td></tr>
+                        <tr><td><span class="ic">api-get-bundles</span></td><td class="font-semibold">60 requests</td><td class="text-slate-500">Per minute</td></tr>
+                        <tr><td><span class="ic">api-get-transactions</span></td><td class="font-semibold">60 requests</td><td class="text-slate-500">Per minute</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="code-block"><pre><span class="cc">// 429 Rate Limit Exceeded</span>
+{
+  <span class="ck">"status"</span>: <span class="ckw">false</span>, <span class="ck">"statusCode"</span>: <span class="cn">429</span>,
+  <span class="ck">"message"</span>: <span class="cs">"Rate limit exceeded. Retry after 47 seconds."</span>,
+  <span class="ck">"retry_after_seconds"</span>: <span class="cn">47</span>
+}</pre></div>
+        </section>
+
+        <!-- Errors -->
+        <section id="errors" class="doc-section mb-12">
+            <h2 class="text-xl font-bold text-slate-900 mb-3">Error Handling</h2>
+            <p class="text-slate-600 text-sm mb-4">All responses follow a consistent structure. Always check the <span class="ic">status</span> field first.</p>
+            <div class="code-block mb-5"><pre><span class="cc">// All responses — success and failure — share this shape</span>
+{
+  <span class="ck">"status"</span>:     <span class="ckw">true</span> | <span class="ckw">false</span>,
+  <span class="ck">"statusCode"</span>: <span class="cn">200</span>,
+  <span class="ck">"message"</span>:    <span class="cs">"Human readable description"</span>,
+  <span class="ck">"payload"</span>:    { <span class="cc">/* present on success only */</span> }
+}</pre></div>
+            <div class="bg-white border border-slate-200 rounded-xl overflow-hidden mb-5">
+                <table class="dt">
+                    <thead><tr><th>Code</th><th>Meaning</th><th>Common Cause</th></tr></thead>
+                    <tbody>
+                        <tr><td><span class="inline-block bg-green-100 text-green-700 font-bold text-xs px-2 py-0.5 rounded">200</span></td><td class="font-medium">Success</td><td class="text-slate-500 text-xs">Check <span class="ic">status</span> field in body</td></tr>
+                        <tr><td><span class="inline-block bg-orange-100 text-orange-700 font-bold text-xs px-2 py-0.5 rounded">400</span></td><td class="font-medium">Bad Request</td><td class="text-slate-500 text-xs">Missing/invalid fields, insufficient balance, frozen wallet</td></tr>
+                        <tr><td><span class="inline-block bg-red-100 text-red-700 font-bold text-xs px-2 py-0.5 rounded">401</span></td><td class="font-medium">Unauthorised</td><td class="text-slate-500 text-xs">Missing or invalid <span class="ic">X-API-Key</span> header</td></tr>
+                        <tr><td><span class="inline-block bg-red-100 text-red-700 font-bold text-xs px-2 py-0.5 rounded">403</span></td><td class="font-medium">Forbidden</td><td class="text-slate-500 text-xs">API key revoked — generate a new one from the dashboard</td></tr>
+                        <tr><td><span class="inline-block bg-orange-100 text-orange-700 font-bold text-xs px-2 py-0.5 rounded">404</span></td><td class="font-medium">Not Found</td><td class="text-slate-500 text-xs">Bundle unavailable for this network/size, or order not found</td></tr>
+                        <tr><td><span class="inline-block bg-orange-100 text-orange-700 font-bold text-xs px-2 py-0.5 rounded">409</span></td><td class="font-medium">Conflict</td><td class="text-slate-500 text-xs">Concurrent wallet update — safe to retry after a short delay</td></tr>
+                        <tr><td><span class="inline-block bg-purple-100 text-purple-700 font-bold text-xs px-2 py-0.5 rounded">429</span></td><td class="font-medium">Too Many Requests</td><td class="text-slate-500 text-xs">Rate limit exceeded — wait <span class="ic">retry_after_seconds</span></td></tr>
+                        <tr><td><span class="inline-block bg-red-100 text-red-700 font-bold text-xs px-2 py-0.5 rounded">500</span></td><td class="font-medium">Server Error</td><td class="text-slate-500 text-xs">Unhandled error — contact support if it persists</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <h3 class="text-base font-semibold text-slate-800 mb-3">Common Error Responses</h3>
+            <div class="space-y-2">
+                <div class="code-block"><pre><span class="cc">// 401 — Invalid API key</span>
+{ <span class="ck">"status"</span>: <span class="ckw">false</span>, <span class="ck">"statusCode"</span>: <span class="cn">401</span>, <span class="ck">"message"</span>: <span class="cs">"Invalid API key"</span> }</pre></div>
+                <div class="code-block"><pre><span class="cc">// 400 — Insufficient balance</span>
+{ <span class="ck">"status"</span>: <span class="ckw">false</span>, <span class="ck">"statusCode"</span>: <span class="cn">400</span>, <span class="ck">"message"</span>: <span class="cs">"Insufficient balance. Required: GH₵22.00, Available: GH₵10.00"</span> }</pre></div>
+                <div class="code-block"><pre><span class="cc">// 400 — Invalid phone</span>
+{ <span class="ck">"status"</span>: <span class="ckw">false</span>, <span class="ck">"statusCode"</span>: <span class="cn">400</span>, <span class="ck">"message"</span>: <span class="cs">"Invalid phone number. Must be exactly 10 digits, no country code."</span> }</pre></div>
+                <div class="code-block"><pre><span class="cc">// 404 — Bundle not found</span>
+{ <span class="ck">"status"</span>: <span class="ckw">false</span>, <span class="ck">"statusCode"</span>: <span class="cn">404</span>, <span class="ck">"message"</span>: <span class="cs">"Bundle not available for this network and size"</span> }</pre></div>
+            </div>
+        </section>
+
+        <!-- ══════════ ENDPOINTS ══════════ -->
+        <h2 class="text-xl font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">API Endpoints</h2>
+
+        <!-- Check Balance -->
+        <div id="ep-balance" class="doc-section ep-card">
+            <div class="ep-header">
+                <span class="badge-post text-xs font-bold px-2.5 py-1 rounded-md">POST</span>
+                <code class="text-sm font-semibold text-slate-800">/api-balance</code>
+                <span class="ml-auto text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">60 req/min</span>
+            </div>
+            <div class="p-5 space-y-4">
+                <p class="text-slate-600 text-sm">Returns your current wallet balance and frozen status. No request body required.</p>
+                <div class="code-block tabbed">
+                    <div class="lang-tabs">
+                        <button class="lang-tab active" data-lang="js">JavaScript</button>
+                        <button class="lang-tab" data-lang="curl">cURL</button>
+                        <button class="lang-tab" data-lang="python">Python</button>
+                    </div>
+                    <div class="lang-panel active" data-lang="js"><pre><span class="ckw">const</span> res = <span class="ckw">await</span> <span class="cfn">fetch</span>(
+  <span class="cs">'https://primeconnect.site/api/api-balance'</span>,
+  {
+    method: <span class="cs">'POST'</span>,
+    headers: {
+      <span class="cs">'X-API-Key'</span>:     process.env.PRIME_API_KEY,
+      <span class="cs">'Content-Type'</span>: <span class="cs">'application/json'</span>,
+    },
+  }
+);
+<span class="ckw">const</span> data = <span class="ckw">await</span> res.<span class="cfn">json</span>();
+console.<span class="cfn">log</span>(data.payload.balance); <span class="cc">// e.g. 178.50</span></pre></div>
+                    <div class="lang-panel" data-lang="curl"><pre><span class="cfn">curl</span> -X POST \
+  https://primeconnect.site/api/api-balance \
+  -H <span class="cs">"X-API-Key: pk_live_your_key"</span> \
+  -H <span class="cs">"Content-Type: application/json"</span></pre></div>
+                    <div class="lang-panel" data-lang="python"><pre><span class="ckw">import</span> requests
+
+res = requests.<span class="cfn">post</span>(
+    <span class="cs">"https://primeconnect.site/api/api-balance"</span>,
+    headers={<span class="cs">"X-API-Key"</span>: <span class="cs">"pk_live_your_key"</span>},
+)
+<span class="cfn">print</span>(res.<span class="cfn">json</span>()[<span class="cs">"payload"</span>][<span class="cs">"balance"</span>])</pre></div>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Success Response <span class="text-green-600">200</span></p>
+                    <div class="code-block"><pre>{
+  <span class="ck">"status"</span>: <span class="ckw">true</span>, <span class="ck">"statusCode"</span>: <span class="cn">200</span>,
+  <span class="ck">"message"</span>: <span class="cs">"Balance retrieved successfully"</span>,
+  <span class="ck">"payload"</span>: {
+    <span class="ck">"balance"</span>:  <span class="cn">178.50</span>,
+    <span class="ck">"currency"</span>: <span class="cs">"GHS"</span>
+  }
+}</pre></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Make Order -->
+        <div id="ep-order" class="doc-section ep-card">
+            <div class="ep-header">
+                <span class="badge-post text-xs font-bold px-2.5 py-1 rounded-md">POST</span>
+                <code class="text-sm font-semibold text-slate-800">/api-order</code>
+                <span class="ml-auto text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">30 req/min</span>
+            </div>
+            <div class="p-5 space-y-4">
+                <p class="text-slate-600 text-sm">Places a data bundle order for your customer. Deducts from your wallet immediately.</p>
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Request Parameters</p>
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                        <table class="dt">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td><span class="ic">phone</span></td><td class="text-slate-500 text-xs">String</td><td><span class="text-red-500 font-bold text-xs">Yes</span></td><td class="text-slate-600 text-xs">10-digit number, no country code. e.g. <span class="ic">0241234567</span></td></tr>
+                                <tr><td><span class="ic">size</span></td><td class="text-slate-500 text-xs">Integer</td><td><span class="text-red-500 font-bold text-xs">Yes</span></td><td class="text-slate-600 text-xs">Bundle size in GB. Must match an active bundle. e.g. <span class="ic">1</span>, <span class="ic">5</span>, <span class="ic">10</span></td></tr>
+                                <tr><td><span class="ic">network</span></td><td class="text-slate-500 text-xs">String</td><td><span class="text-red-500 font-bold text-xs">Yes</span></td><td class="text-slate-600 text-xs"><span class="ic">mtn</span>, <span class="ic">telecel</span>, or <span class="ic">airteltigo</span> (case-insensitive)</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="code-block tabbed">
+                    <div class="lang-tabs">
+                        <button class="lang-tab active" data-lang="js">JavaScript</button>
+                        <button class="lang-tab" data-lang="curl">cURL</button>
+                        <button class="lang-tab" data-lang="python">Python</button>
+                    </div>
+                    <div class="lang-panel active" data-lang="js"><pre><span class="ckw">const</span> res = <span class="ckw">await</span> <span class="cfn">fetch</span>(
+  <span class="cs">'https://primeconnect.site/api/api-order'</span>,
+  {
+    method: <span class="cs">'POST'</span>,
+    headers: {
+      <span class="cs">'X-API-Key'</span>:     process.env.PRIME_API_KEY,
+      <span class="cs">'Content-Type'</span>: <span class="cs">'application/json'</span>,
+    },
+    body: JSON.<span class="cfn">stringify</span>({
+      phone:   <span class="cs">'0241234567'</span>,
+      size:    <span class="cn">5</span>,
+      network: <span class="cs">'mtn'</span>,
+    }),
+  }
+);
+<span class="ckw">const</span> data = <span class="ckw">await</span> res.<span class="cfn">json</span>();
+<span class="ckw">if</span> (data.status) {
+  console.<span class="cfn">log</span>(<span class="cs">'Order ref:'</span>, data.payload.order_reference);
+  console.<span class="cfn">log</span>(<span class="cs">'New balance:'</span>, data.payload.new_balance);
+  console.<span class="cfn">log</span>(<span class="cs">'Status:'</span>, data.payload.status);
+}</pre></div>
+                    <div class="lang-panel" data-lang="curl"><pre><span class="cfn">curl</span> -X POST \
+  https://primeconnect.site/api/api-order \
+  -H <span class="cs">"X-API-Key: pk_live_your_key"</span> \
+  -H <span class="cs">"Content-Type: application/json"</span> \
+  -d <span class="cs">'{"phone":"0241234567","size":5,"network":"mtn"}'</span></pre></div>
+                    <div class="lang-panel" data-lang="python"><pre>res = requests.<span class="cfn">post</span>(
+    <span class="cs">"https://primeconnect.site/api/api-order"</span>,
+    headers={<span class="cs">"X-API-Key"</span>: <span class="cs">"pk_live_your_key"</span>},
+    json={<span class="cs">"phone"</span>: <span class="cs">"0241234567"</span>, <span class="cs">"size"</span>: <span class="cn">5</span>, <span class="cs">"network"</span>: <span class="cs">"mtn"</span>},
+)
+data = res.<span class="cfn">json</span>()
+<span class="cfn">print</span>(data[<span class="cs">"payload"</span>][<span class="cs">"order_reference"</span>])</pre></div>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Success Response <span class="text-green-600">200</span></p>
+                    <div class="code-block"><pre>{
+  <span class="ck">"status"</span>: <span class="ckw">true</span>, <span class="ck">"statusCode"</span>: <span class="cn">200</span>,
+  <span class="ck">"message"</span>: <span class="cs">"Order placed successfully"</span>,
+  <span class="ck">"payload"</span>: {
+    <span class="ck">"order_reference"</span>:  <span class="cs">"API-M9K2D4-IJ78KL"</span>,
+    <span class="ck">"network"</span>:          <span class="cs">"mtn"</span>,
+    <span class="ck">"size"</span>:             <span class="cn">5</span>,
+    <span class="ck">"phone"</span>:            <span class="cs">"0241234567"</span>,
+    <span class="ck">"amount_deducted"</span>:  <span class="cn">22.50</span>,
+    <span class="ck">"new_balance"</span>:      <span class="cn">156.00</span>,
+    <span class="ck">"status"</span>: <span class="cs">"processing"</span>
+  }
+}</pre></div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Order Status -->
+        <div id="ep-status" class="doc-section ep-card">
+            <div class="ep-header">
+                <span class="badge-post text-xs font-bold px-2.5 py-1 rounded-md">POST</span>
+                <code class="text-sm font-semibold text-slate-800">/api-order-status</code>
+                <span class="ml-auto text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">60 req/min</span>
+            </div>
+            <div class="p-5 space-y-4">
+                <p class="text-slate-600 text-sm">Returns the current status of an order you placed. You can only query your own orders.</p>
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Request Parameters</p>
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                        <table class="dt">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td><span class="ic">order_reference</span></td><td class="text-slate-500 text-xs">String</td><td><span class="text-red-500 font-bold text-xs">Yes</span></td><td class="text-slate-600 text-xs">The reference returned when you placed the order</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="code-block tabbed">
+                    <div class="lang-tabs">
+                        <button class="lang-tab active" data-lang="js">JavaScript</button>
+                        <button class="lang-tab" data-lang="curl">cURL</button>
+                        <button class="lang-tab" data-lang="python">Python</button>
+                    </div>
+                    <div class="lang-panel active" data-lang="js"><pre><span class="ckw">const</span> res = <span class="ckw">await</span> <span class="cfn">fetch</span>(
+  <span class="cs">'https://primeconnect.site/api/api-order-status'</span>,
+  {
+    method: <span class="cs">'POST'</span>,
+    headers: {
+      <span class="cs">'X-API-Key'</span>:     process.env.PRIME_API_KEY,
+      <span class="cs">'Content-Type'</span>: <span class="cs">'application/json'</span>,
+    },
+    body: JSON.<span class="cfn">stringify</span>({ order_reference: <span class="cs">'API-M9K2D4-IJ78KL'</span> }),
+  }
+);
+<span class="ckw">const</span> { payload } = <span class="ckw">await</span> res.<span class="cfn">json</span>();
+console.<span class="cfn">log</span>(payload.status); <span class="cc">// processing | completed | failed</span></pre></div>
+                    <div class="lang-panel" data-lang="curl"><pre><span class="cfn">curl</span> -X POST \
+  https://primeconnect.site/api/api-order-status \
+  -H <span class="cs">"X-API-Key: pk_live_your_key"</span> \
+  -H <span class="cs">"Content-Type: application/json"</span> \
+  -d <span class="cs">'{"order_reference":"API-M9K2D4-IJ78KL"}'</span></pre></div>
+                    <div class="lang-panel" data-lang="python"><pre>res = requests.<span class="cfn">post</span>(
+    <span class="cs">"https://primeconnect.site/api/api-order-status"</span>,
+    headers={<span class="cs">"X-API-Key"</span>: <span class="cs">"pk_live_your_key"</span>},
+    json={<span class="cs">"order_reference"</span>: <span class="cs">"API-M9K2D4-IJ78KL"</span>},
+)
+<span class="cfn">print</span>(res.<span class="cfn">json</span>()[<span class="cs">"payload"</span>][<span class="cs">"status"</span>])</pre></div>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Success Response <span class="text-green-600">200</span></p>
+                    <div class="code-block mb-3"><pre>{
+  <span class="ck">"status"</span>: <span class="ckw">true</span>, <span class="ck">"statusCode"</span>: <span class="cn">200</span>,
+  <span class="ck">"payload"</span>: {
+    <span class="ck">"order_reference"</span>: <span class="cs">"API-M9K2D4-IJ78KL"</span>,
+    <span class="ck">"network"</span>: <span class="cs">"mtn"</span>, <span class="ck">"size"</span>: <span class="cn">5</span>, <span class="ck">"phone"</span>: <span class="cs">"0241234567"</span>,
+    <span class="ck">"amount"</span>: <span class="cn">22.50</span>, <span class="ck">"status"</span>: <span class="cs">"processing"</span>,
+    <span class="ck">"created_at"</span>: <span class="cs">"2026-05-09T10:05:00Z"</span>
+  }
+}</pre></div>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Order Status Values</p>
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                        <table class="dt">
+                            <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+                            <tbody>
+                                <tr><td><span class="inline-block bg-blue-100 text-blue-700 font-bold text-xs px-2 py-0.5 rounded-full">processing</span></td><td class="text-slate-500 text-xs">Order received — delivery in progress</td></tr>
+                                <tr><td><span class="inline-block bg-green-100 text-green-700 font-bold text-xs px-2 py-0.5 rounded-full">completed</span></td><td class="text-slate-500 text-xs">Data delivered successfully</td></tr>
+                                <tr><td><span class="inline-block bg-red-100 text-red-700 font-bold text-xs px-2 py-0.5 rounded-full">failed</span></td><td class="text-slate-500 text-xs">Could not be fulfilled — contact support</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Get Bundles -->
+        <div id="ep-bundles" class="doc-section ep-card">
+            <div class="ep-header">
+                <span class="badge-post text-xs font-bold px-2.5 py-1 rounded-md">POST</span>
+                <code class="text-sm font-semibold text-slate-800">/api-get-bundles</code>
+                <span class="ml-auto text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">60 req/min</span>
+            </div>
+            <div class="p-5 space-y-4">
+                <p class="text-slate-600 text-sm">Returns all available data bundles and their prices. Use this to build your product listing dynamically rather than hardcoding prices.</p>
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Request Parameters</p>
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                        <table class="dt">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td><span class="ic">network</span></td><td class="text-slate-500 text-xs">String</td><td><span class="text-slate-400 text-xs">Optional</span></td><td class="text-slate-600 text-xs">Filter by network: <span class="ic">mtn</span>, <span class="ic">telecel</span>, or <span class="ic">airteltigo</span>. Omit to return all.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="code-block tabbed">
+                    <div class="lang-tabs">
+                        <button class="lang-tab active" data-lang="js">JavaScript</button>
+                        <button class="lang-tab" data-lang="curl">cURL</button>
+                        <button class="lang-tab" data-lang="python">Python</button>
+                    </div>
+                    <div class="lang-panel active" data-lang="js"><pre><span class="ckw">const</span> res = <span class="ckw">await</span> <span class="cfn">fetch</span>(
+  <span class="cs">'https://primeconnect.site/api/api-get-bundles'</span>,
+  {
+    method: <span class="cs">'POST'</span>,
+    headers: {
+      <span class="cs">'X-API-Key'</span>:     process.env.PRIME_API_KEY,
+      <span class="cs">'Content-Type'</span>: <span class="cs">'application/json'</span>,
+    },
+    body: JSON.<span class="cfn">stringify</span>({ network: <span class="cs">'mtn'</span> }), <span class="cc">// optional</span>
+  }
+);
+<span class="ckw">const</span> { payload } = <span class="ckw">await</span> res.<span class="cfn">json</span>();
+payload.bundles.<span class="cfn">forEach</span>(b => console.<span class="cfn">log</span>(`${b.size}GB — GH₵${b.price}`));</pre></div>
+                    <div class="lang-panel" data-lang="curl"><pre><span class="cfn">curl</span> -X POST \
+  https://primeconnect.site/api/api-get-bundles \
+  -H <span class="cs">"X-API-Key: pk_live_your_key"</span> \
+  -H <span class="cs">"Content-Type: application/json"</span> \
+  -d <span class="cs">'{"network":"mtn"}'</span></pre></div>
+                    <div class="lang-panel" data-lang="python"><pre>res = requests.<span class="cfn">post</span>(
+    <span class="cs">"https://primeconnect.site/api/api-get-bundles"</span>,
+    headers={<span class="cs">"X-API-Key"</span>: <span class="cs">"pk_live_your_key"</span>},
+    json={<span class="cs">"network"</span>: <span class="cs">"mtn"</span>},  <span class="cc"># optional</span>
+)
+bundles = res.<span class="cfn">json</span>()[<span class="cs">"payload"</span>][<span class="cs">"bundles"</span>]</pre></div>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Success Response <span class="text-green-600">200</span></p>
+                    <div class="code-block"><pre>{
+  <span class="ck">"status"</span>: <span class="ckw">true</span>, <span class="ck">"statusCode"</span>: <span class="cn">200</span>,
+  <span class="ck">"message"</span>: <span class="cs">"Bundles retrieved successfully"</span>,
+  <span class="ck">"payload"</span>: {
+    <span class="ck">"bundles"</span>: [
+      {
+        <span class="ck">"id"</span>:               <span class="cs">"uuid-here"</span>,
+        <span class="ck">"network"</span>:          <span class="cs">"mtn"</span>,
+        <span class="ck">"size"</span>:             <span class="cn">5</span>,
+        <span class="ck">"price"</span>:    <span class="cn">22.50</span>,
+        <span class="ck">"currency"</span>: <span class="cs">"GHS"</span>
+      }
+    ],
+    <span class="ck">"count"</span>: <span class="cn">1</span>
+  }
+}</pre></div>
+                </div>
+                <div class="c-info rounded-xl p-4">
+                    <p class="text-sm text-blue-800"><i class="fas fa-info-circle mr-2"></i>The <span class="ic">price</span> field reflects the exact amount that will be charged to your wallet for each bundle.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transactions -->
+        <div id="ep-transactions" class="doc-section ep-card">
+            <div class="ep-header">
+                <span class="badge-post text-xs font-bold px-2.5 py-1 rounded-md">POST</span>
+                <code class="text-sm font-semibold text-slate-800">/api-get-transactions</code>
+                <span class="ml-auto text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">60 req/min</span>
+            </div>
+            <div class="p-5 space-y-4">
+                <p class="text-slate-600 text-sm">Returns your API order history with pagination support. Only returns orders placed via the API — not dashboard purchases.</p>
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Request Parameters</p>
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                        <table class="dt">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td><span class="ic">limit</span></td><td class="text-slate-500 text-xs">Integer</td><td><span class="text-slate-400 text-xs">Optional</span></td><td class="text-slate-600 text-xs">Records per page. Default <span class="ic">10</span>, max <span class="ic">50</span></td></tr>
+                                <tr><td><span class="ic">offset</span></td><td class="text-slate-500 text-xs">Integer</td><td><span class="text-slate-400 text-xs">Optional</span></td><td class="text-slate-600 text-xs">Pagination offset. Default <span class="ic">0</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="code-block tabbed">
+                    <div class="lang-tabs">
+                        <button class="lang-tab active" data-lang="js">JavaScript</button>
+                        <button class="lang-tab" data-lang="curl">cURL</button>
+                        <button class="lang-tab" data-lang="python">Python</button>
+                    </div>
+                    <div class="lang-panel active" data-lang="js"><pre><span class="ckw">const</span> res = <span class="ckw">await</span> <span class="cfn">fetch</span>(
+  <span class="cs">'https://primeconnect.site/api/api-get-transactions'</span>,
+  {
+    method: <span class="cs">'POST'</span>,
+    headers: {
+      <span class="cs">'X-API-Key'</span>:     process.env.PRIME_API_KEY,
+      <span class="cs">'Content-Type'</span>: <span class="cs">'application/json'</span>,
+    },
+    body: JSON.<span class="cfn">stringify</span>({ limit: <span class="cn">10</span>, offset: <span class="cn">0</span> }),
+  }
+);
+<span class="ckw">const</span> { payload } = <span class="ckw">await</span> res.<span class="cfn">json</span>();
+console.<span class="cfn">log</span>(`${payload.count} of ${payload.total} orders`);</pre></div>
+                    <div class="lang-panel" data-lang="curl"><pre><span class="cfn">curl</span> -X POST \
+  https://primeconnect.site/api/api-get-transactions \
+  -H <span class="cs">"X-API-Key: pk_live_your_key"</span> \
+  -H <span class="cs">"Content-Type: application/json"</span> \
+  -d <span class="cs">'{"limit":10,"offset":0}'</span></pre></div>
+                    <div class="lang-panel" data-lang="python"><pre>res = requests.<span class="cfn">post</span>(
+    <span class="cs">"https://primeconnect.site/api/api-get-transactions"</span>,
+    headers={<span class="cs">"X-API-Key"</span>: <span class="cs">"pk_live_your_key"</span>},
+    json={<span class="cs">"limit"</span>: <span class="cn">10</span>, <span class="cs">"offset"</span>: <span class="cn">0</span>},
+)
+payload = res.<span class="cfn">json</span>()[<span class="cs">"payload"</span>]
+<span class="cfn">print</span>(f"{payload['count']} of {payload['total']} orders")</pre></div>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Success Response <span class="text-green-600">200</span></p>
+                    <div class="code-block"><pre>{
+  <span class="ck">"status"</span>: <span class="ckw">true</span>, <span class="ck">"statusCode"</span>: <span class="cn">200</span>,
+  <span class="ck">"message"</span>: <span class="cs">"Transactions retrieved successfully"</span>,
+  <span class="ck">"payload"</span>: {
+    <span class="ck">"transactions"</span>: [
+      {
+        <span class="ck">"order_reference"</span>:  <span class="cs">"API-M9K2D4-IJ78KL"</span>,
+        <span class="ck">"network"</span>:          <span class="cs">"mtn"</span>,
+        <span class="ck">"phone"</span>:            <span class="cs">"0241234567"</span>,
+        <span class="ck">"size"</span>:             <span class="cn">5</span>,
+        <span class="ck">"amount"</span>:           <span class="cn">22.50</span>,
+        <span class="ck">"currency"</span>:         <span class="cs">"GHS"</span>,
+        <span class="ck">"status"</span>:     <span class="cs">"processing"</span>,
+        <span class="ck">"created_at"</span>: <span class="cs">"2026-05-09T10:05:00Z"</span>
+      }
+    ],
+    <span class="ck">"count"</span>:  <span class="cn">1</span>,
+    <span class="ck">"total"</span>:  <span class="cn">25</span>,
+    <span class="ck">"limit"</span>:  <span class="cn">10</span>,
+    <span class="ck">"offset"</span>: <span class="cn">0</span>
+  }
+}</pre></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Best Practices -->
+        <section id="best-practices" class="doc-section mb-12">
+            <h2 class="text-xl font-bold text-slate-900 mb-4">Best Practices</h2>
+            <div class="grid gap-3">
+                <div class="bg-white border border-slate-200 rounded-xl p-4 flex gap-3">
+                    <div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-lock text-red-600 text-sm"></i></div>
+                    <div><h4 class="font-semibold text-slate-800 text-sm mb-1">Secure your API key</h4><p class="text-xs text-slate-500">Store it as an environment variable. Never expose it in client-side code or version control. If compromised, revoke it immediately from Dashboard → API Access.</p></div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-xl p-4 flex gap-3">
+                    <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-server text-blue-600 text-sm"></i></div>
+                    <div><h4 class="font-semibold text-slate-800 text-sm mb-1">Server-side calls only</h4><p class="text-xs text-slate-500">All API requests must originate from your backend. Never call the API directly from a browser or mobile client.</p></div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-xl p-4 flex gap-3">
+                    <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-wallet text-green-600 text-sm"></i></div>
+                    <div><h4 class="font-semibold text-slate-800 text-sm mb-1">Monitor your balance</h4><p class="text-xs text-slate-500">Call <span class="ic">api-balance</span> before bulk orders to confirm sufficient funds and a non-frozen wallet.</p></div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-xl p-4 flex gap-3">
+                    <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-check-circle text-amber-600 text-sm"></i></div>
+                    <div><h4 class="font-semibold text-slate-800 text-sm mb-1">Validate input before sending</h4><p class="text-xs text-slate-500">Validate phone numbers (10 digits, no country code) and bundle sizes on your side before calling the API to avoid unnecessary 400 errors.</p></div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-xl p-4 flex gap-3">
+                    <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-sync-alt text-purple-600 text-sm"></i></div>
+                    <div><h4 class="font-semibold text-slate-800 text-sm mb-1">Handle errors gracefully</h4><p class="text-xs text-slate-500">Always check <span class="ic">status</span> in every response. For 409 conflicts, retry after a short delay. For 500 errors, contact support before retrying.</p></div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-xl p-4 flex gap-3">
+                    <div class="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-layer-group text-slate-600 text-sm"></i></div>
+                    <div><h4 class="font-semibold text-slate-800 text-sm mb-1">Use Get Bundles dynamically</h4><p class="text-xs text-slate-500">Fetch bundles via <span class="ic">api-get-bundles</span> to build your product listing dynamically. Prices may change — never hardcode them in your application.</p></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Support -->
+        <div class="c-info rounded-xl p-5 mb-8">
+            <p class="text-sm text-blue-800 font-medium mb-1"><i class="fas fa-headset mr-2"></i>Need Help?</p>
+            <p class="text-sm text-blue-700">Verify your key starts with <span class="ic">pk_live_</span>, ensure your wallet has sufficient balance, and check error messages for specific details. Contact support through your dashboard if issues persist.</p>
+        </div>
+
+    </main>
+</div>
+
+<!-- Footer -->
+<footer class="border-t border-slate-200 mt-4 py-6">
+    <div class="max-w-7xl mx-auto px-4 md:px-6 flex flex-col md:flex-row items-center justify-between gap-3">
+        <p class="text-xs text-slate-400">Prime Connect Developer API</p>
+        <div class="flex items-center gap-4 text-xs text-slate-400">
+            <a href="dashboard.html" class="hover:text-slate-600 transition-colors">Dashboard</a>
+            <a href="dashboard.html#api-access" class="hover:text-slate-600 transition-colors">API Keys</a>
+        </div>
+    </div>
+</footer>
+
+<script src="api-docs-main.js"></script>
+</body>
+</html>

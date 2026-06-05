@@ -1,0 +1,33 @@
+{
+  "name": "primeconnect-dashboard",
+  "version": "1.0.0",
+  "description": "Production-ready dashboard for Prime Connect",
+  "main": "dist/index.html",
+  "scripts": {
+    "build": "tailwindcss -i ./src/styles.css -o ./dist/styles.css --minify && cp *.html dist/ && cp *.js dist/ && cp service-worker.js dist/",
+    "dev": "tailwindcss -i ./src/styles.css -o ./dist/styles.css --watch",
+    "start": "cd dist && python -m http.server 8000",
+    "clean": "rm -rf dist",
+    "prebuild": "mkdir -p dist",
+    "deploy": "npm run build && echo 'Build complete. Upload the dist/ folder to your web server.'",
+    "test": "npm run build && echo 'Build test passed. Check dist/ folder for output.'"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.44.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.15",
+    "supabase": "^2.76.12",
+    "tailwindcss": "^3.4.19"
+  },
+  "keywords": [
+    "dashboard",
+    "data",
+    "ghana",
+    "supabase",
+    "pwa"
+  ],
+  "author": "Prime Connect",
+  "license": "MIT"
+}

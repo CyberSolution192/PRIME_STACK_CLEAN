@@ -1,0 +1,1884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://esm.sh https://js.paystack.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://fonts.gstatic.com https://paystack.com; img-src 'self' data: https:; connect-src 'self' https: wss://rpolemxgussziexdmdxe.supabase.co https://paystack.com https://js.paystack.co; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; frame-src https://checkout.paystack.com; base-uri 'self'; form-action 'self'">    
+     <meta name="keywords" content="data bundles, Ghana, MTN, AirtelTigo, Telecel, internet data">
+    <meta name="author" content="Prime Connect">
+    <title>Prime Connect - Dashboard</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" href="https://api.faviconkit.com/primeconnect.com/64" type="image/x-icon">
+    
+    <!-- Preconnect for CDNs -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Local Compiled CSS -->
+    <link rel="stylesheet" href="./dist/app.css">
+    <link rel="stylesheet" href="./dist/dashboard.css">
+
+    <!-- Paystack Inline -->
+    <script src="https://js.paystack.co/v1/inline.js"></script>
+</head>
+<body class="min-h-screen bg-gray-50">
+
+<!-- ── Site Lock Overlay — must be first in body so it exists when checkSiteLock() runs ── -->
+   <div id="siteLockOverlay" class="fixed inset-0 z-[99999] hidden items-center justify-center p-4 site-lock-overlay-bg">class="site-lock-overlay-bg"
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm mx-auto p-8 text-center">
+    <div class="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5 site-lock-circle">
+   <i id="siteLockIcon" class="fas fa-clock text-3xl site-lock-icon"></i>
+    </div>
+    <h2 id="siteLockTitle" class="text-2xl font-bold mb-2 site-lock-title"></h2>We Are Currently Closed</h2>
+    <p id="siteLockMessage" class="mb-6 text-sm leading-relaxed site-lock-message"></p>
+    <div class="inline-flex items-center gap-2 text-sm px-5 py-2 rounded-full site-lock-badge">
+      <i class="fas fa-calendar-alt text-xs"></i>
+      <span id="siteLockFooter">Reopens soon.</span>
+    </div>
+  </div>
+</div>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
+        <div class="w-16 h-16 rounded-full border-4 border-brand-200 border-t-brand-600 animate-spin mb-4"></div>
+        <p class="text-gray-600 font-medium">Loading your dashboard...</p>
+    </div>
+    
+    <!-- Mobile Sidebar Overlay -->
+    <div id="mobileOverlay" class="fixed inset-0 bg-black/50 z-40 hidden"></div>
+    
+    <!-- Main Layout -->
+   <div class="flex min-h-screen h-screen overflow-hidden">
+            <!-- Desktop Sidebar -->
+        <aside class="hidden md:flex md:w-64 flex-col bg-gray-900 text-white">
+            <div class="p-4 border-b border-gray-700">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-lg bg-brand-600 flex items-center justify-center">
+                        <i class="fas fa-bolt"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg"><span class="text-brand-400">PRIME</span></h1>
+                        <p class="text-xs text-gray-400">CONNECT</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-4 border-b border-gray-700">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div>
+                        <p class="font-medium text-sm" id="desktopUserName">Loading...</p>
+                        <p class="text-xs text-gray-400">Online</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-4 border-b border-gray-700">
+                <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Wallet Balance</p>
+                <p class="text-2xl font-bold" id="desktopBalance">GH₵ 0.00</p>
+            </div>
+            
+            <nav class="flex-1 p-4">
+                <div class="space-y-1">
+                    <button data-page="dashboard" class="nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-home w-5 text-center"></i>
+                        <span>Dashboard</span>
+                    </button>
+                    <button data-page="purchase" class="nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-shopping-bag w-5 text-center"></i>
+                        <span>Buy Data</span>
+                    </button>
+                    <button data-page="topup" class="nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-wallet w-5 text-center"></i>
+                        <span>Add Funds</span>
+                    </button>
+                    <button data-page="history" class="nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-history w-5 text-center"></i>
+                        <span>History</span>
+                    </button>
+                    <button data-page="store" class="nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-store w-5 text-center"></i>
+                        <span>Store</span>
+                    </button>
+                    <button data-page="settings" class="nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-cog w-5 text-center"></i>
+                        <span>Settings</span>
+                    </button>
+                    <button data-page="api-access" class="nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-code w-5 text-center"></i>
+                        <span>API Access</span>
+                    </button>
+                </div>
+            </nav>
+            
+            <div class="p-4 border-t border-gray-700">
+                <button id="desktopLogout" class="w-full flex items-center justify-center space-x-2 p-3 rounded-lg bg-red-600 hover:bg-red-700 transition-colors text-white">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </aside>
+        
+      <!-- Main Content -->
+        <main class="flex-1 flex flex-col min-h-0 min-w-0">
+            <!-- Mobile Header -->
+            <header class="md:hidden sticky top-0 bg-white border-b border-gray-200 z-30" style="min-height:64px;">
+                <div class="flex items-center justify-between p-4" style="min-height:64px;gap:8px;">
+                    <!-- Left: hamburger + page title — contained so they never overflow right -->
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                        <button id="openMobileSidebar" class="p-2 flex-shrink-0 relative z-10" style="min-width:40px;min-height:40px;">
+                            <i class="fas fa-bars text-xl text-gray-700"></i>
+                        </button>
+                        <h1 class="font-bold text-gray-800 text-base leading-tight truncate" id="mobilePageTitle" style="min-width:0;max-width:100%;">Dashboard</h1>
+                    </div>
+                    <!-- Right: balance + avatar — flex-shrink-0 so it never pushes into the title -->
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <div class="text-right">
+                            <p class="text-xs text-gray-500 leading-tight">Balance</p>
+                            <p class="font-bold text-brand-600 text-sm leading-tight" id="mobileHeaderBalance">GH₵ 0.00</p>
+                        </div>
+                        <div class="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 flex-shrink-0">
+                            <i class="fas fa-user text-sm"></i>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- Desktop Header -->
+            <header class="hidden md:flex items-center justify-between p-6 bg-white border-b border-gray-200">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800" id="desktopPageTitle">Dashboard</h1>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <!-- User info + SVG avatar -->
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 border border-brand-200 flex-shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+                                <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm font-semibold text-gray-800 leading-tight" id="headerUserName">Loading...</p>
+                            <p class="text-xs text-green-600 font-medium flex items-center justify-end gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>Online
+                            </p>
+                        </div>
+                    </div>
+                    <!-- Logout button -->
+                    <button id="headerLogoutBtn" title="Logout"
+                        class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition-colors text-xs font-semibold">
+                        <i class="fas fa-sign-out-alt text-sm"></i>
+                        <span class="hidden lg:inline">Logout</span>
+                    </button>
+                </div>
+            </header>
+            
+            <!-- Announcement Ticker — hidden until an announcement is set -->
+            <div id="announcementTicker" class="hidden">
+                <div class="ticker-track" id="tickerTrack">
+                    <!-- items duplicated by JS for seamless loop -->
+                </div>
+            </div>
+
+            <!-- Pages Container -->
+     <div id="pagesContainer" class="flex-1 overflow-y-auto overflow-x-hidden" style="min-height: 0;">
+                <!-- Dashboard Page -->        
+                       <!-- Dashboard Page -->
+                <div id="dashboardPage" class="page active">
+                    <div class="space-y-4">
+                    <!-- Welcome Banner -->
+                    <div class="rounded-2xl shadow-card overflow-hidden brand-gradient text-white">
+                        <div class="p-5">
+                            <div class="flex items-center justify-between gap-4">
+                                <div>
+                                    <h2 class="text-lg font-bold mb-0.5">Welcome back! 👋</h2>
+                                    <p class="text-brand-100 text-sm">Your wallet is ready for purchases</p>
+                                </div>
+                                <button id="quickAddFunds" class="flex-shrink-0 bg-white text-brand-900 font-bold px-4 py-2 rounded-lg hover:bg-brand-50 transition-colors text-sm">
+                                    <i class="fas fa-plus mr-1"></i> Add Funds
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stats Grid -->
+                    <div class="stats-grid">
+                        <!-- Balance Card -->
+                        <div class="card p-4">
+                            <div class="flex justify-between items-start">
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-xs text-gray-500 mb-1">Balance</p>
+                                    <h3 class="text-xl font-bold text-gray-800 mb-1" id="dashboardBalance">GH₵ 0.00</h3>
+                                    <p class="text-xs text-gray-400">Updated now</p>
+                                </div>
+                                <div class="p-2 rounded-lg bg-brand-50 text-brand-600 flex-shrink-0 ml-2">
+                                    <i class="fas fa-wallet text-sm"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stats Card -->
+                        <div class="card p-4">
+                            <div class="flex justify-between items-start">
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-xs text-gray-500 mb-1">Purchases</p>
+                                    <h3 class="text-xl font-bold text-gray-800 mb-0.5" id="totalPurchases">0</h3>
+                                    <p class="text-xs text-purple-600 font-semibold truncate" id="totalSpend">GH₵ 0.00 spent</p>
+                                </div>
+                                <div class="p-2 rounded-lg bg-purple-50 text-purple-600 flex-shrink-0 ml-2">
+                                    <i class="fas fa-chart-line text-sm"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions — spans full width on mobile via .quick-actions-card -->
+                        <div class="card p-4 quick-actions-card">
+                            <p class="text-xs text-gray-500 mb-3 font-medium">Quick Actions</p>
+                            <div class="grid grid-cols-2 gap-3">
+                                <button id="quickBuyData" class="flex flex-col items-center justify-center p-3 rounded-xl bg-gray-50 hover:bg-brand-50 transition-colors">
+                                    <div class="w-10 h-10 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center mb-1.5">
+                                        <i class="fas fa-cart-plus text-sm"></i>
+                                    </div>
+                                    <span class="text-xs font-semibold text-gray-700">Buy Data</span>
+                                </button>
+                                <button id="quickHistory" class="flex flex-col items-center justify-center p-3 rounded-xl bg-gray-50 hover:bg-purple-50 transition-colors">
+                                    <div class="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mb-1.5">
+                                        <i class="fas fa-history text-sm"></i>
+                                    </div>
+                                    <span class="text-xs font-semibold text-gray-700">History</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Join WhatsApp Channel Banner -->
+                        <div class="quick-actions-card rounded-2xl overflow-hidden" style="background: linear-gradient(135deg, #075e54 0%, #128c7e 50%, #25d366 100%); position:relative;">
+                            <!-- Decorative circles -->
+                            <div style="position:absolute;top:-18px;right:-18px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,0.08);pointer-events:none;"></div>
+                            <div style="position:absolute;bottom:-24px;right:40px;width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none;"></div>
+                            <div style="position:absolute;top:20px;right:60px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.1);pointer-events:none;"></div>
+
+                            <div class="p-4 relative">
+                                <!-- Top row: icon + badge -->
+                                <div class="flex items-start justify-between mb-3">
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,0.18);">
+                                            <i class="fab fa-whatsapp text-white text-2xl"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-white font-bold text-sm leading-tight">Official Channel</p>
+                                            <div class="flex items-center gap-1 mt-0.5">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-green-300 inline-block" style="animation:pulse 2s infinite;"></span>
+                                                <span class="text-green-200 text-xs font-medium">Live &amp; Active</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs font-bold px-2 py-1 rounded-full text-green-900" style="background:rgba(255,255,255,0.9);">FREE</span>
+                                </div>
+
+                                <!-- Headline -->
+                                <p class="text-white font-extrabold text-base leading-tight mb-1">Join Our WhatsApp Channel</p>
+                                <p class="text-green-100 text-xs leading-relaxed mb-4">Get exclusive deals, instant alerts &amp; data tips delivered straight to you. Be the first to know! 🔔</p>
+
+                                <!-- Perks row -->
+                                <div class="flex items-center gap-3 mb-4">
+                                    <div class="flex items-center gap-1">
+                                        <i class="fas fa-bolt text-yellow-300 text-xs"></i>
+                                        <span class="text-green-100 text-xs font-medium">Instant alerts</span>
+                                    </div>
+                                    <div class="w-px h-3 bg-green-400 opacity-50"></div>
+                                    <div class="flex items-center gap-1">
+                                        <i class="fas fa-tag text-yellow-300 text-xs"></i>
+                                        <span class="text-green-100 text-xs font-medium">Exclusive deals</span>
+                                    </div>
+                                    <div class="w-px h-3 bg-green-400 opacity-50"></div>
+                                    <div class="flex items-center gap-1">
+                                        <i class="fas fa-shield-alt text-yellow-300 text-xs"></i>
+                                        <span class="text-green-100 text-xs font-medium">100% free</span>
+                                    </div>
+                                </div>
+
+                                <!-- CTA Button -->
+                                <a href="https://whatsapp.com/channel/0029Vb6y5f76WaKgHSdSR13V" target="_blank" rel="noopener noreferrer"
+                                    class="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+                                    style="background:rgba(255,255,255,0.95);color:#075e54;">
+                                    <i class="fab fa-whatsapp text-base"></i>
+                                    Join Now — It's Free
+                                    <i class="fas fa-arrow-right text-xs"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Transactions -->
+                    <div class="card">
+                        <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                            <h3 class="text-sm font-bold text-gray-800">Recent Activity</h3>
+                            <button id="viewAllHistory" class="text-xs font-semibold text-brand-600 hover:text-brand-700">
+                                View All <i class="fas fa-arrow-right ml-1"></i>
+                            </button>
+                        </div>
+                        <div class="px-4 pt-1 pb-3">
+                            <div id="transactionsList"></div>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+                <!-- Purchase Page -->
+                <div id="purchasePage" class="page space-y-6">
+                    <div class="card p-6">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                            <div>
+                                <h2 class="text-2xl font-bold text-gray-800">Buy Data Bundle</h2>
+                                <p class="text-gray-500">Select network and choose your bundle</p>
+                            </div>
+                            <div class="bg-brand-50 px-4 py-3 rounded-lg border border-brand-100">
+                                <p class="text-xs text-gray-500 font-medium">Balance</p>
+                                <p class="text-xl font-bold text-brand-700" id="purchasePageBalance">GH₵ 0.00</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Network Selection -->
+                        <div class="mb-8">
+                            <h3 class="text-lg font-bold text-gray-700 mb-4">Select Network</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="networkSelection">
+                                <button data-network="MTN" class="network-btn card p-4 text-left hover:border-brand-500 transition-colors">
+                                    <div class="flex items-center gap-3 mb-2">
+                                        <div class="w-12 h-12 rounded-lg mtn-bg flex items-center justify-center font-bold">
+                                            M
+                                        </div>
+                                        <div>
+                                            <h4 class="font-bold text-gray-800">MTN</h4>
+                                            <p class="text-xs text-gray-500">Best Offers</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-xs text-gray-500 flex items-center">
+                                        <i class="fas fa-check-circle text-green-500 mr-1"></i>
+                                        Available
+                                    </div>
+                                </button>
+                                
+                                <button data-network="AIRTELTIGO" class="network-btn card p-4 text-left hover:border-brand-500 transition-colors">
+                                    <div class="flex items-center gap-3 mb-2">
+                                        <div class="w-12 h-12 rounded-lg airteltigo-bg flex items-center justify-center font-bold">
+                                            A
+                                        </div>
+                                        <div>
+                                            <h4 class="font-bold text-gray-800">AirtelTigo</h4>
+                                            <p class="text-xs text-gray-500">Big Time</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-xs text-gray-500 flex items-center">
+                                        <i class="fas fa-check-circle text-green-500 mr-1"></i>
+                                        Available
+                                    </div>
+                                </button>
+                                
+                                <button data-network="TELECEL" class="network-btn card p-4 text-left hover:border-brand-500 transition-colors">
+                                    <div class="flex items-center gap-3 mb-2">
+                                        <div class="w-12 h-12 rounded-lg telecel-bg flex items-center justify-center font-bold">
+                                            T
+                                        </div>
+                                        <div>
+                                            <h4 class="font-bold text-gray-800">Telecel</h4>
+                                            <p class="text-xs text-gray-500">Super Speed</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-xs text-gray-500 flex items-center">
+                                        <i class="fas fa-check-circle text-green-500 mr-1"></i>
+                                        Available
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Bundles Grid -->
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-700 mb-4">Available Bundles</h3>
+                            <div id="bundlesContainer">
+                                <div class="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                                    <i class="fas fa-hand-pointer text-3xl text-gray-400 mb-3"></i>
+                                    <p class="text-gray-500 font-medium">Select a network to view bundles</p>
+                                    <p class="text-gray-400 text-sm mt-1">Tap any network card above</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Topup Page -->
+                <div id="topupPage" class="page">
+                    <div class="max-w-md mx-auto">
+                        <div class="card overflow-hidden">
+                            <div class="brand-gradient p-6 text-white text-center">
+                                <div class="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
+                                    <i class="fas fa-wallet text-2xl"></i>
+                                </div>
+                                <h2 class="text-xl font-bold">Fund Your Wallet</h2>
+                                <p class="text-brand-100 text-sm mt-1">Instant Mobile Money Deposit</p>
+                            </div>
+                            
+                            <div class="p-6 space-y-5">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Amount to Deposit (GH₵)</label>
+                                    <input type="number" id="topupAmount" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" placeholder="e.g. 50" min="1" step="0.01" required>
+                                </div>
+
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Mobile Network</label>
+                                    <select id="mobileNetwork" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" required>
+                                        <option value="">Select network</option>
+                                        <option value="MTN">MTN Mobile Money</option>
+                                        <option value="AIRTELTIGO">AirtelTigo Money</option>
+                                        <option value="TELECEL">Telecel Cash</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+                                    <input type="tel" id="mobileNumber" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" placeholder="024xxxxxxx" required>
+                                </div>
+                                
+                                <button id="paystackBtn" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 px-4 rounded-lg transition-colors">
+                                    Pay Now
+                                </button>
+                                
+                                <p class="text-xs text-gray-500 text-center">
+                                    <i class="fas fa-lock mr-1"></i>
+                                    Secure payment powered by Paystack
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+              <!-- History Page -->
+                <div id="historyPage" class="page">
+                    <div class="card">
+                        <div class="p-4 border-b border-gray-100">
+                            <h2 class="text-base font-bold text-gray-800 mb-1">Transaction History</h2>
+                            <p class="text-xs text-gray-500 mb-3">All your transactions in one place</p>
+                            <div class="history-controls">
+                                <input type="text" id="historySearch"
+                                    class="px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm"
+                                    placeholder="Search transactions...">
+                                <select id="historyFilter"
+                                    class="px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
+                                    <option value="all">All Transactions</option>
+                                    <option value="purchase">Purchases</option>
+                                    <option value="deposit">Top-ups</option>
+                                    <option value="withdrawal">Withdrawals</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="px-4 py-1">
+                            <div id="historyList"></div>
+                        </div>
+
+                        <div class="p-4 border-t border-gray-100">
+                            <p class="text-xs text-gray-400 text-center mb-2" id="paginationInfo"></p>
+                            <div class="flex gap-2">
+                                <button id="prevPage" class="flex-1 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40 text-sm font-medium">
+                                    ← Previous
+                                </button>
+                                <button id="nextPage" class="flex-1 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40 text-sm font-medium">
+                                    Next →
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Settings Page -->
+                <div id="settingsPage" class="page">
+                    <div class="max-w-2xl mx-auto">
+                        <div class="card p-6">
+                            <h2 class="text-xl font-bold text-gray-800 mb-6">Account Settings</h2>
+                            
+                            <form id="profileForm" class="space-y-6">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">First Name *</label>
+                                        <input type="text" id="firstName" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" required>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Last Name *</label>
+                                        <input type="text" id="lastName" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" required>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
+                                    <input type="email" id="email" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" required>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Phone Number *</label>
+                                    <input type="tel" id="phone" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" required>
+                                </div>
+                                
+                                <div>
+                                    <h3 class="text-lg font-medium text-gray-800 mb-3">Notification Preferences</h3>
+                                    <div class="space-y-3">
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="emailNotifications" class="rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                                            <span class="ml-2 text-sm text-gray-700">Email notifications</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="smsNotifications" class="rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                                            <span class="ml-2 text-sm text-gray-700">SMS notifications</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="pushNotifications" class="rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                                            <span class="ml-2 text-sm text-gray-700">Push notifications</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="pt-4 border-t border-gray-200">
+                                    <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium py-3 px-6 rounded-lg transition-colors">
+                                        Save Changes
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Security Section — resellers only (shown via JS) -->
+                        <div id="pinSecuritySection" class="hidden card p-6 mt-6">
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
+                                    <i class="fas fa-shield-alt text-amber-600"></i>
+                                </div>
+                                <div>
+                                    <h2 class="text-xl font-bold text-gray-800">Transaction Security</h2>
+                                    <p class="text-sm text-gray-500">Protect your withdrawal requests with a PIN</p>
+                                </div>
+                            </div>
+
+                            <!-- PIN not yet set state -->
+                            <div id="pinNotSetState">
+                                <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5 flex items-start gap-3">
+                                    <i class="fas fa-exclamation-triangle text-amber-500 mt-0.5 flex-shrink-0"></i>
+                                    <div>
+                                        <p class="font-semibold text-amber-800 text-sm">No Transaction PIN set</p>
+                                        <p class="text-xs text-amber-700 mt-0.5">Without a PIN, anyone with access to your account can submit withdrawals.</p>
+                                    </div>
+                                </div>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">New PIN (4-6 digits)</label>
+                                        <input type="password" id="newPinInput" inputmode="numeric" maxlength="6" pattern="[0-9]*"
+                                            placeholder="••••"
+                                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-center text-2xl tracking-widest">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Confirm PIN</label>
+                                        <input type="password" id="confirmPinInput" inputmode="numeric" maxlength="6" pattern="[0-9]*"
+                                            placeholder="••••"
+                                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-center text-2xl tracking-widest">
+                                    </div>
+                                    <button id="setPinBtn"
+                                        class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-lg transition-colors">
+                                        <i class="fas fa-lock mr-2"></i>Set Transaction PIN
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- PIN already set state -->
+                            <div id="pinSetState" class="hidden">
+                                <div class="bg-green-50 border border-green-200 rounded-xl p-4 mb-5 flex items-start gap-3">
+                                    <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0"></i>
+                                    <div>
+                                        <p class="font-semibold text-green-800 text-sm">Transaction PIN is active</p>
+                                        <p class="text-xs text-green-700 mt-0.5">Your withdrawals are protected. You can change your PIN below.</p>
+                                    </div>
+                                </div>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Current PIN</label>
+                                        <input type="password" id="oldPinInput" inputmode="numeric" maxlength="6" pattern="[0-9]*"
+                                            placeholder="••••"
+                                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-center text-2xl tracking-widest">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">New PIN (4-6 digits)</label>
+                                        <input type="password" id="changePinInput" inputmode="numeric" maxlength="6" pattern="[0-9]*"
+                                            placeholder="••••"
+                                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-center text-2xl tracking-widest">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Confirm New PIN</label>
+                                        <input type="password" id="confirmChangePinInput" inputmode="numeric" maxlength="6" pattern="[0-9]*"
+                                            placeholder="••••"
+                                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-center text-2xl tracking-widest">
+                                    </div>
+                                    <button id="changePinBtn"
+                                        class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-lg transition-colors">
+                                        <i class="fas fa-sync mr-2"></i>Change Transaction PIN
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Store Page -->
+                <div id="storePage" class="page space-y-6">
+
+                    <!-- PAYWALL -->
+                    <div id="storePaywall" class="hidden">
+                      <div class="max-w-2xl mx-auto">
+                        <div class="text-center mb-8">
+                          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-100 mb-4">
+                            <i class="fas fa-store text-3xl text-brand-600"></i>
+                          </div>
+                          <h2 class="text-3xl font-bold text-gray-800 mb-2">Unlock Your Reseller Store</h2>
+                          <p class="text-gray-500 text-lg">Start selling data bundles with your own branded store</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                          <div class="card p-5 flex gap-4 items-start">
+                            <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                              <i class="fas fa-link text-blue-600"></i>
+                            </div>
+                            <div>
+                              <p class="font-semibold text-gray-800 mb-1">Custom Store Link</p>
+                              <p class="text-sm text-gray-500">Share your personalized store URL with customers</p>
+                            </div>
+                          </div>
+                          <div class="card p-5 flex gap-4 items-start">
+                            <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center flex-shrink-0">
+                              <i class="fas fa-tags text-green-600"></i>
+                            </div>
+                            <div>
+                              <p class="font-semibold text-gray-800 mb-1">Set Your Own Prices</p>
+                              <p class="text-sm text-gray-500">Customize bundle prices for maximum profits</p>
+                            </div>
+                          </div>
+                          <div class="card p-5 flex gap-4 items-start">
+                            <div class="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
+                              <i class="fas fa-user-circle text-purple-600"></i>
+                            </div>
+                            <div>
+                              <p class="font-semibold text-gray-800 mb-1">Branded Experience</p>
+                              <p class="text-sm text-gray-500">Your name displayed for customer recognition</p>
+                            </div>
+                          </div>
+                          <div class="card p-5 flex gap-4 items-start">
+                            <div class="w-10 h-10 rounded-lg bg-yellow-50 flex items-center justify-center flex-shrink-0">
+                              <i class="fas fa-infinity text-yellow-600"></i>
+                            </div>
+                            <div>
+                              <p class="font-semibold text-gray-800 mb-1">Lifetime Access</p>
+                              <p class="text-sm text-gray-500">One-time payment, no recurring fees</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="card p-8 text-center border-2 border-brand-200">
+                          <p class="text-sm font-semibold text-brand-600 uppercase tracking-wider mb-2">One-time Fee</p>
+                          <p class="text-5xl font-bold text-gray-800 mb-1">GH₵ 50.00</p>
+                          <p class="text-sm text-gray-500 mb-6">Deducted from your wallet balance</p>
+                          <div id="paywallBalanceInfo" class="mb-6 p-3 rounded-lg bg-gray-50 text-sm text-gray-600"></div>
+                          <button id="unlockStoreBtn"
+                            class="w-full bg-brand-600 hover:bg-brand-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-xl text-lg transition-all">
+                            <i class="fas fa-lock-open mr-2"></i>Unlock Store Now
+                          </button>
+                          <p class="text-xs text-gray-400 mt-3">
+                            <i class="fas fa-shield-alt mr-1"></i>Secure payment from your wallet balance
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- STORE CONTENT -->
+                    <div id="storeContent" class="hidden">
+
+                        <!-- ══ PERSISTENT STORE HEADER — mobile only ══ -->
+                        <div class="md:hidden flex items-center gap-3 mb-4 px-1">
+                            <button id="storeNavBtn" class="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0">
+                                <i class="fas fa-arrow-left text-sm"></i>
+                            </button>
+                            <div class="flex-1 min-w-0">
+                                <h2 id="storeTabTitle" class="text-base font-bold text-gray-800 leading-tight truncate">Overview</h2>
+                                <p class="text-xs text-gray-500">My Store Dashboard</p>
+                            </div>
+                            <button id="storeMenuBtn" class="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors shadow-sm flex-shrink-0">
+                                <i class="fas fa-bars text-sm"></i>
+                            </button>
+                        </div>
+
+                        <!-- Tab panels (moved into overlay by JS when store opens) -->
+                        <div id="storeMobileContent">
+
+                        <!-- ══ TAB PANEL: MY STORE ══ -->
+                        <div id="storeTab-mystore" class="store-tab-panel">
+
+                            <!-- ── 4 compact stat cards ── -->
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+
+                                <!-- Total Earnings -->
+                                <div style="background:#fff;border-radius:14px;padding:12px 14px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                                        <div style="width:30px;height:30px;border-radius:8px;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                            <i class="fas fa-coins" style="color:#16a34a;font-size:12px;"></i>
+                                        </div>
+                                        <p style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Total Revenue</p>
+                                    </div>
+                                    <p style="font-size:17px;font-weight:800;color:#1e293b;line-height:1;" id="storeTotalRevenue">GH₵ 0.00</p>
+                                </div>
+
+                                <!-- Total Sales -->
+                                <div style="background:#fff;border-radius:14px;padding:12px 14px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                                        <div style="width:30px;height:30px;border-radius:8px;background:#e0f2fe;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                            <i class="fas fa-shopping-bag" style="color:#0284c7;font-size:12px;"></i>
+                                        </div>
+                                        <p style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Total Sales</p>
+                                    </div>
+                                    <p style="font-size:17px;font-weight:800;color:#1e293b;line-height:1;" id="storeTotalOrders">0</p>
+                                </div>
+
+                                <!-- Pending Balance -->
+                                <div style="background:#fff;border-radius:14px;padding:12px 14px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                                        <div style="width:30px;height:30px;border-radius:8px;background:#fef9c3;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                            <i class="fas fa-clock" style="color:#ca8a04;font-size:12px;"></i>
+                                        </div>
+                                        <p style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Pending</p>
+                                    </div>
+                                    <p style="font-size:17px;font-weight:800;color:#1e293b;line-height:1;" id="storePendingBalance">GH₵ 0.00</p>
+                                </div>
+
+                                <!-- Total Withdrawn -->
+                                <div style="background:#fff;border-radius:14px;padding:12px 14px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                                        <div style="width:30px;height:30px;border-radius:8px;background:#fce7f3;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                            <i class="fas fa-arrow-circle-up" style="color:#db2777;font-size:12px;"></i>
+                                        </div>
+                                        <p style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Withdrawn</p>
+                                    </div>
+                                    <p style="font-size:17px;font-weight:800;color:#1e293b;line-height:1;" id="storeTotalWithdrawn">GH₵ 0.00</p>
+                                </div>
+                            </div>
+
+                            <!-- ── Available Profits & Withdrawal History card ── -->
+                            <div class="flex items-center justify-between gap-3 mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                                <div>
+                                    <p class="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Available Profits</p>
+                                    <p class="text-lg font-extrabold text-emerald-800" id="overviewWithdrawAvailable">GH₵ 0.00</p>
+                                </div>
+                                <button id="withdrawProfitsBtn"
+                                    class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-colors flex items-center gap-2">
+                                    <i class="fas fa-arrow-up text-xs"></i> Withdraw
+                                </button>
+                            </div>
+
+                            <!-- ── Store identity row ── -->
+                            <div style="background:#fff;border-radius:14px;padding:13px 16px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.05);display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+                                <div style="width:38px;height:38px;border-radius:10px;background:#f0fdf4;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                    <i class="fas fa-store" style="color:#16a34a;font-size:15px;"></i>
+                                </div>
+                                <div style="flex:1;min-width:0;">
+                                    <p style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">Your Store</p>
+                                    <p style="font-size:14px;font-weight:700;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="storeDisplayName">—</p>
+                                </div>
+                                <button id="openStoreBtn"
+                                    style="background:#f0fdf4;color:#16a34a;font-weight:700;font-size:12px;padding:8px 14px;border-radius:10px;border:1.5px solid #bbf7d0;cursor:pointer;white-space:nowrap;transition:background .15s;"
+                                    Open <i class="fas fa-external-link-alt ml-1" style="font-size:10px;"></i>
+                                </button>
+                            </div>
+
+                            <!-- ── Store link section ── -->
+                            <div id="storeLinkSection" style="background:#fff;border-radius:14px;padding:14px 16px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.05);margin-bottom:14px;">
+                                <p style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                                    <i class="fas fa-link" style="color:#0284c7;"></i> Your Store Link
+                                </p>
+                                <div style="display:flex;gap:8px;margin-bottom:10px;">
+                                    <input type="text" id="storeLinkInput" readonly
+                                        style="flex:1;padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;font-size:12px;font-family:monospace;color:#475569;min-width:0;"
+                                        placeholder="Click Generate to get your link">
+                                    <button id="copyStoreLink"
+                                        style="background:#0284c7;color:#fff;padding:9px 14px;border-radius:10px;border:none;cursor:pointer;font-size:13px;flex-shrink:0;transition:background .15s;"
+                                        >
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                                <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                                    <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                                        <div style="width:28px;height:28px;border-radius:7px;background:#e0f2fe;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                            <i class="fas fa-search-location" style="color:#0284c7;font-size:11px;"></i>
+                                        </div>
+                                        <div style="min-width:0;">
+                                            <p style="font-size:12px;font-weight:600;color:#1e293b;">Track Order Page</p>
+                                            <p style="font-size:11px;color:#64748b;">Share with customers to track orders</p>
+                                        </div>
+                                    </div>
+                                    <button id="copyStoreTrackLinkBtn"
+                                        style="background:#fff;color:#0284c7;font-size:11px;font-weight:600;padding:6px 11px;border-radius:8px;border:1px solid #bae6fd;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:background .15s;"
+                                        >
+                                        <i class="fas fa-link" style="font-size:10px;margin-right:3px;"></i> Copy
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- ── Generate link button ── -->
+                            <button id="generateStoreLink"
+                                style="width:100%;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;font-weight:700;font-size:13px;padding:12px;border-radius:12px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s;box-shadow:0 2px 8px rgba(2,132,199,0.3);"
+                                >
+                                <i class="fas fa-link"></i> Generate Store Link
+                            </button>
+
+                        </div><!-- end storeTab-mystore -->
+
+                        <!-- ══ TAB PANEL: BUNDLE PRICES ══ -->
+                        <div id="storeTab-bundleprices" class="store-tab-panel hidden">
+                        <div class="card p-6">
+
+                            <!-- Header -->
+                            <div class="flex items-center justify-between gap-3 mb-5 pb-4 border-b border-gray-100">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
+                                        <i class="fas fa-tags text-green-600"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-lg font-bold text-gray-800">Bundle Prices</h2>
+                                        <p class="text-sm text-gray-500">Set your custom selling prices per network</p>
+                                    </div>
+                                </div>
+                                <button id="updatePricesBtn"
+                                    class="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold rounded-xl transition-colors whitespace-nowrap">
+                                    <i class="fas fa-save text-xs"></i> Save Prices
+                                </button>
+                            </div>
+
+                            <!-- Network Tab Cards — mirrors Buy Data page -->
+                            <div class="mb-5">
+                                <h3 class="text-sm font-bold text-gray-600 mb-3">Select Network</h3>
+                                <div class="grid grid-cols-3 gap-3" id="pricingNetworkSelection">
+
+                                    <button data-pricing-network="mtn"
+                                        class="pricing-net-btn card p-3 text-left hover:border-brand-500 transition-colors border-2 border-transparent">
+                                        <div class="flex items-center gap-2 mb-1.5">
+                                            <div class="w-9 h-9 rounded-lg mtn-bg flex items-center justify-center font-bold text-gray-800 text-sm flex-shrink-0">M</div>
+                                            <div class="min-w-0">
+                                                <h4 class="font-bold text-gray-800 text-sm leading-tight">MTN</h4>
+                                                <p class="text-xs text-gray-500 truncate">Best Offers</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-xs text-gray-500 flex items-center gap-1">
+                                            <i class="fas fa-check-circle text-green-500"></i> Available
+                                        </div>
+                                    </button>
+
+                                    <button data-pricing-network="airteltigo"
+                                        class="pricing-net-btn card p-3 text-left hover:border-brand-500 transition-colors border-2 border-transparent">
+                                        <div class="flex items-center gap-2 mb-1.5">
+                                            <div class="w-9 h-9 rounded-lg airteltigo-bg flex items-center justify-center font-bold text-white text-sm flex-shrink-0">A</div>
+                                            <div class="min-w-0">
+                                                <h4 class="font-bold text-gray-800 text-sm leading-tight">AirtelTigo</h4>
+                                                <p class="text-xs text-gray-500 truncate">Big Time</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-xs text-gray-500 flex items-center gap-1">
+                                            <i class="fas fa-check-circle text-green-500"></i> Available
+                                        </div>
+                                    </button>
+
+                                    <button data-pricing-network="telecel"
+                                        class="pricing-net-btn card p-3 text-left hover:border-brand-500 transition-colors border-2 border-transparent">
+                                        <div class="flex items-center gap-2 mb-1.5">
+                                            <div class="w-9 h-9 rounded-lg telecel-bg flex items-center justify-center font-bold text-white text-sm flex-shrink-0">T</div>
+                                            <div class="min-w-0">
+                                                <h4 class="font-bold text-gray-800 text-sm leading-tight">Telecel</h4>
+                                                <p class="text-xs text-gray-500 truncate">Super Speed</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-xs text-gray-500 flex items-center gap-1">
+                                            <i class="fas fa-check-circle text-green-500"></i> Available
+                                        </div>
+                                    </button>
+
+                                </div>
+                            </div>
+
+                            <!-- Bundle grid for selected network -->
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-600 mb-3" id="pricingBundlesHeading">Select a network above</h3>
+                                <div id="bundlePricesContainer">
+                                    <!-- Bundle pricing cards loaded by JS -->
+                                    <div class="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                                        <i class="fas fa-hand-pointer text-3xl text-gray-400 mb-3"></i>
+                                        <p class="text-gray-500 font-medium">Select a network to set prices</p>
+                                        <p class="text-gray-400 text-sm mt-1">Tap any network card above</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                        </div><!-- end storeTab-bundleprices -->
+
+                        <!-- ══ TAB PANEL: RECENT STORE ORDERS ══ -->
+                        <div id="storeTab-recentorders" class="store-tab-panel hidden">
+                        <div class="card p-6">
+                            <div class="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
+                                <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-receipt text-amber-600"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h2 class="text-lg font-bold text-gray-800">Recent Store Orders</h2>
+                                    <p class="text-sm text-gray-500">All orders placed through your store link</p>
+                                </div>
+                            </div>
+                            <!-- Filters row -->
+                            <div class="flex items-center justify-between gap-2 mb-4 flex-wrap">
+                                <select id="orderStatusFilter"  class="text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:ring-2 focus:ring-brand-500">
+                                    <option value="all">All Orders</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="processing">Processing</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="failed">Failed</option>
+                                </select>
+                                <button id="refreshStoreOrdersBtn" class="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Refresh orders">
+                                    <i class="fas fa-sync-alt text-sm"></i>
+                                </button>
+                            </div>
+                            <!-- Orders list -->
+                            <div id="storeOrdersList" class="space-y-3">
+                                <!-- Store orders will be loaded here -->
+                            </div>
+                            <!-- Pagination — always visible once orders load -->
+                            <div id="storeOrdersPagination" class="hidden mt-5 pt-4 border-t border-gray-200">
+                                <div class="flex items-center justify-between gap-3">
+                                    <p class="text-sm font-medium text-gray-600" id="storeOrdersPaginationInfo"></p>
+                                    <div class="flex items-center gap-2">
+                                        <button id="storeOrdersPrevBtn" 
+                                            class="flex items-center gap-1 px-4 py-2 text-sm font-semibold bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                                            <i class="fas fa-chevron-left text-xs"></i> Prev
+                                        </button>
+                                        <span id="storeOrdersPageIndicator" class="text-xs font-bold text-gray-500 px-2"></span>
+                                        <button id="storeOrdersNextBtn" 
+                                            class="flex items-center gap-1 px-4 py-2 text-sm font-semibold bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                                            Next <i class="fas fa-chevron-right text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        </div><!-- end storeTab-recentorders -->
+
+                        <!-- ══ TAB PANEL: WITHDRAWAL HISTORY ══ -->
+                        <div id="storeTab-withdrawalhistory" class="store-tab-panel hidden">
+                        <div class="card p-6">
+                            <div class="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
+                                <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-money-bill-wave text-emerald-600"></i>
+                                </div>
+                                <div>
+                                    <h2 class="text-lg font-bold text-gray-800">Withdrawal History</h2>
+                                    <p class="text-sm text-gray-500">Track all your profit withdrawal requests</p>
+                                </div>
+                            </div>
+                            <!-- Withdraw action row removed - card now on Overview tab -->
+                            <div id="withdrawal-history-list" class="space-y-4">
+                                <div class="text-center py-8 text-gray-400">
+                                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                    <p>Loading withdrawal history...</p>
+                                </div>
+                            </div>
+                        </div>
+                        </div><!-- end storeTab-withdrawalhistory -->
+
+                        <!-- ══ TAB PANEL: STORE CUSTOMIZATION ══ -->
+                        <div id="storeTab-customization" class="store-tab-panel hidden">
+        <div id="storeCustomizationCard" class="card p-6">
+            <div class="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+                <div class="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-paint-brush text-indigo-600"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-gray-800">Store Customization</h3>
+                    <p class="text-sm text-gray-500">Personalise how your store looks and connects with customers</p>
+                </div>
+            </div>
+
+            <div class="space-y-5 max-w-2xl">
+
+                <!-- Store Name -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                        <i class="fas fa-store text-indigo-400 mr-1"></i> Store Name
+                        <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" id="customStoreName" maxlength="60"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        placeholder="e.g. Kwame's Data Hub">
+                    <p class="text-xs text-gray-400 mt-1">This will appear as your store title for customers</p>
+                </div>
+
+                <!-- Store Description -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                        <i class="fas fa-align-left text-indigo-400 mr-1"></i> Store Description
+                        <span class="text-xs font-normal text-gray-400 ml-1">(Optional)</span>
+                    </label>
+                    <textarea id="customStoreDesc" maxlength="200" rows="2"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-none"
+                        placeholder="e.g. Fast &amp; reliable data bundles — delivered instantly"></textarea>
+                    <p class="text-xs text-gray-400 mt-1">A short tagline shown under your store name</p>
+                </div>
+
+                <!-- Support Phone -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                        <i class="fas fa-phone text-indigo-400 mr-1"></i> Support Phone
+                        <span class="text-xs font-normal text-gray-400 ml-1">(Optional)</span>
+                    </label>
+                    <input type="tel" id="customSupportPhone" maxlength="15"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        placeholder="e.g. 0241234567">
+                    <p class="text-xs text-gray-400 mt-1">Shown on your store — customers can call or SMS you</p>
+                </div>
+
+                <!-- WhatsApp Support Link -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                        <i class="fab fa-whatsapp text-green-500 mr-1"></i> WhatsApp Support Link
+                        <span class="text-xs font-normal text-gray-400 ml-1">(Optional)</span>
+                    </label>
+                    <input type="url" id="customWhatsappSupport" maxlength="300"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        placeholder="https://wa.me/233241234567">
+                    <p class="text-xs text-gray-400 mt-1">Customers tap "Contact Support" to chat with you on WhatsApp</p>
+                </div>
+
+                <!-- WhatsApp Group Link -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                        <i class="fab fa-whatsapp text-green-600 mr-1"></i> WhatsApp Group Link
+                        <span class="text-xs font-normal text-gray-400 ml-1">(Optional)</span>
+                    </label>
+                    <input type="url" id="customWhatsappGroup" maxlength="300"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        placeholder="https://chat.whatsapp.com/xxxxxxxxxxxxxxxx">
+                    <p class="text-xs text-gray-400 mt-1">Customers see a "Join WhatsApp Group" button on your store</p>
+                </div>
+
+                <!-- Theme Color -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-palette text-indigo-400 mr-1"></i> Store Theme Color
+                    </label>
+                    <!-- Preset swatches -->
+                    <div class="flex flex-wrap items-center gap-3 mb-3">
+                        <button type="button" data-color="#0284c7" title="Sky Blue"
+                            data-action="preset-color"
+                            class="swatch w-9 h-9 rounded-full border-4 border-white shadow ring-2 ring-transparent hover:scale-110 transition-transform"
+                            style="background:#0284c7"></button>
+                        <button type="button" data-color="#7c3aed" title="Purple"
+                            data-action="preset-color"
+                            class="swatch w-9 h-9 rounded-full border-4 border-white shadow ring-2 ring-transparent hover:scale-110 transition-transform"
+                            style="background:#7c3aed"></button>
+                        <button type="button" data-color="#059669" title="Emerald"
+                            data-action="preset-color"
+                            class="swatch w-9 h-9 rounded-full border-4 border-white shadow ring-2 ring-transparent hover:scale-110 transition-transform"
+                            style="background:#059669"></button>
+                        <button type="button" data-color="#dc2626" title="Red"
+                            data-action="preset-color"
+                            class="swatch w-9 h-9 rounded-full border-4 border-white shadow ring-2 ring-transparent hover:scale-110 transition-transform"
+                            style="background:#dc2626"></button>
+                        <button type="button" data-color="#d97706" title="Amber"
+                            data-action="preset-color"
+                            class="swatch w-9 h-9 rounded-full border-4 border-white shadow ring-2 ring-transparent hover:scale-110 transition-transform"
+                            style="background:#d97706"></button>
+                        <button type="button" data-color="#0f172a" title="Midnight"
+                            data-action="preset-color"
+                            class="swatch w-9 h-9 rounded-full border-4 border-white shadow ring-2 ring-transparent hover:scale-110 transition-transform"
+                            style="background:#0f172a"></button>
+                        <button type="button" data-color="#be185d" title="Pink"
+                            data-action="preset-color"
+                            class="swatch w-9 h-9 rounded-full border-4 border-white shadow ring-2 ring-transparent hover:scale-110 transition-transform"
+                            style="background:#be185d"></button>
+                        <!-- Custom color picker swatch -->
+                        <label title="Custom Color"
+                            class="w-9 h-9 rounded-full border-4 border-white shadow cursor-pointer overflow-hidden relative hover:scale-110 transition-transform flex-shrink-0">
+                            <input type="color" id="customColorPicker" value="#0284c7"
+                                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                id="customColorInput">
+                            <div class="w-full h-full bg-gradient-to-br from-pink-400 via-yellow-300 to-blue-500 flex items-center justify-center">
+                                <i class="fas fa-eyedropper text-white text-xs pointer-events-none"></i>
+                            </div>
+                        </label>
+                    </div>
+                    <!-- Live preview pill -->
+                    <div class="flex items-center gap-2 text-xs text-gray-500">
+                        <div id="themeColorPreviewDot" class="w-5 h-5 rounded-full border border-gray-200" style="background:#0284c7"></div>
+                        <span>Selected: <span id="themeColorHexDisplay" class="font-mono font-semibold">#0284c7</span></span>
+                    </div>
+                </div>
+
+                <!-- Save Button -->
+                <div class="pt-3 border-t border-gray-100">
+                    <button id="saveStoreSettingsBtn"
+                        class="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold px-6 py-3 rounded-xl transition-colors flex items-center gap-2 text-sm">
+                        <i class="fas fa-save"></i> Save Store Settings
+                    </button>
+                    <p class="text-xs text-gray-400 mt-2">Changes appear on your store link immediately after saving</p>
+                </div>
+
+            </div>
+        </div>
+
+                        </div><!-- end storeTab-customization -->
+
+                        </div><!-- end mobile tab panels -->
+
+                    </div> <!-- end storeContent -->
+                </div> <!-- end storePage -->
+
+                <!-- ══════════════════════════════════════════ -->
+                <!-- STORE ORDERS PORTAL PAGE                   -->
+                <!-- ══════════════════════════════════════════ -->
+                <div id="storeOrdersPage" class="page space-y-5">
+
+                    <!-- Header + stats -->
+                    <div class="card p-5">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                            <div>
+                                <h2 class="text-xl font-bold text-gray-800">Store Orders Portal</h2>
+                                <p class="text-sm text-gray-500">All orders placed through your store link</p>
+                            </div>
+                            <button id="loadStoreOrdersPortalBtn" class="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-colors self-start sm:self-auto">
+                                <i class="fas fa-sync-alt text-xs"></i> Refresh
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div class="bg-gray-50 rounded-xl p-3.5 border border-gray-100">
+                                <p class="text-xs text-gray-500 mb-1">Total Orders</p>
+                                <p class="text-2xl font-bold text-gray-800" id="portalTotalOrders">—</p>
+                            </div>
+                            <div class="bg-yellow-50 rounded-xl p-3.5 border border-yellow-100">
+                                <p class="text-xs text-yellow-600 mb-1">Pending</p>
+                                <p class="text-2xl font-bold text-yellow-700" id="portalPendingCount">—</p>
+                            </div>
+                            <div class="bg-green-50 rounded-xl p-3.5 border border-green-100">
+                                <p class="text-xs text-green-600 mb-1">Completed</p>
+                                <p class="text-2xl font-bold text-green-700" id="portalCompletedCount">—</p>
+                            </div>
+                            <div class="bg-brand-50 rounded-xl p-3.5 border border-brand-100">
+                                <p class="text-xs text-brand-600 mb-1">Total Revenue</p>
+                                <p class="text-xl font-bold text-brand-700" id="portalTotalRevenue">—</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="card p-4 space-y-3">
+
+                        <!-- Search with button -->
+                        <div class="flex gap-2">
+                            <div class="relative flex-1">
+                                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+                                <input type="text" id="portalSearchInput"
+                                    placeholder="Search phone, ref, network…"
+                                    class="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                                    id="portalSearchInput">
+                            </div>
+                            <button id="doPortalSearchBtn"
+                                class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white text-sm font-semibold rounded-lg transition-colors flex-shrink-0">
+                                Search
+                            </button>
+                            <button id="portalClearBtn" class="hidden px-3 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-medium rounded-lg transition-colors flex-shrink-0">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        <!-- Status filter pills -->
+                        <div>
+                            <p class="text-xs text-gray-400 font-medium mb-2">Filter by status</p>
+                            <div class="flex flex-wrap gap-2" id="portalStatusPills">
+                                <button data-status="all"        class="status-pill px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-gray-800 text-white border-gray-800">All</button>
+                                <button data-status="pending"    class="status-pill px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-white text-gray-500 border-gray-200">Pending</button>
+                                <button data-status="processing" class="status-pill px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-white text-gray-500 border-gray-200">Processing</button>
+                                <button data-status="completed"  class="status-pill px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-white text-gray-500 border-gray-200">Completed</button>
+                                <button data-status="failed"     class="status-pill px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-white text-gray-500 border-gray-200">Failed</button>
+                                <button data-status="cancelled"  class="status-pill px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-white text-gray-500 border-gray-200">Cancelled</button>
+                            </div>
+                        </div>
+
+                        <!-- Network filter -->
+                        <div class="flex items-center gap-3">
+                            <p class="text-xs text-gray-400 font-medium flex-shrink-0">Network:</p>
+                            <select id="portalNetworkFilter" 
+                                class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-brand-500 bg-white">
+                                <option value="all">All Networks</option>
+                                <option value="mtn">MTN</option>
+                                <option value="airteltigo">AirtelTigo</option>
+                                <option value="telecel">Telecel</option>
+                            </select>
+                        </div>
+
+                        <!-- Results count -->
+                        <p id="portalResultsCount" class="text-xs text-gray-400 hidden"></p>
+                    </div>
+
+                    <!-- Orders list -->
+                    <div class="card overflow-hidden">
+                        <div id="portalOrdersList" class="divide-y divide-gray-100">
+                            <div class="p-8 text-center text-gray-400">
+                                <i class="fas fa-spinner fa-spin text-3xl mb-3 block"></i>
+                                <p>Loading orders…</p>
+                            </div>
+                        </div>
+                        <div id="portalPagination" class="hidden px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+                            <p class="text-xs text-gray-500" id="portalPaginationInfo"></p>
+                            <div class="flex gap-2">
+                                <button id="portalPrevBtn"
+                                    class="px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                                    <i class="fas fa-chevron-left mr-1"></i>Prev
+                                </button>
+                                <button id="portalNextBtn"
+                                    class="px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                                    Next<i class="fas fa-chevron-right ml-1"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <!-- END STORE ORDERS PORTAL PAGE -->
+
+                <!-- ═══════════════════════════════════════════════ -->
+                <!-- API Access Page — lives INSIDE pagesContainer  -->
+                <!-- ═══════════════════════════════════════════════ -->
+                <div id="api-accessPage" class="page">
+                  <div class="api-page-wrap">
+
+                    <!-- YOUR SECRET API KEY -->
+                    <div class="api-card">
+                      <p class="api-card-label">Your Secret API Key</p>
+
+                      <!-- Loading state -->
+                      <div id="apiKeyLoading">
+                        <div class="api-spinner"></div>
+                      </div>
+
+                      <!-- No key state -->
+                      <div id="apiNoKeyState" class="hidden">
+                        <div class="api-key-display">
+                          <span class="api-key-placeholder">Click below to generate your key.</span>
+                        </div>
+                        <button id="apiGenerateBtn">
+                          <i class="fas fa-key"></i> Generate API Key
+                        </button>
+                      </div>
+
+                      <!-- Has key state -->
+                      <div id="apiHasKeyState" class="hidden">
+                        <div class="api-key-display">
+                          <div class="api-key-value">
+                            <code id="apiKeyPrefix">pk_••••</code>
+                            <span class="api-key-dots">••••••••••••••••••••</span>
+                            <span id="apiKeyStatus" class="api-key-badge">Active</span>
+                          </div>
+                        </div>
+                        <p class="api-key-meta">
+                          <i class="fas fa-clock"></i> Last used: <span id="apiKeyLastUsed">Never</span>
+                        </p>
+                        <div id="apiKeyLabel" class="hidden api-key-label-row">
+                          <i class="fas fa-tag"></i> Label:
+                          <span id="apiKeyLabelText"></span>
+                        </div>
+                        <div class="api-btn-row">
+                          <button id="apiRevokeBtn">
+                            <i class="fas fa-times-circle"></i> Revoke Key
+                          </button>
+                          <button id="apiRotateBtn">
+                            <i class="fas fa-sync-alt"></i> New Key
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- API DOCUMENTATION -->
+                    <div class="api-docs-card">
+                      <div class="api-docs-icon">
+                        <i class="fas fa-code"></i>
+                      </div>
+                      <div class="api-docs-body">
+                        <h3>API Documentation</h3>
+                        <p>Learn how to integrate Prime Connect into your application with our comprehensive API documentation.</p>
+                        <a id="apiDocsLink" href="api-docs.html" target="_blank" class="api-docs-btn">
+                          <i class="fas fa-book-open" style="font-size:12px;"></i>
+                          View Documentation
+                          <i class="fas fa-external-link-alt" style="font-size:10px;opacity:0.8;"></i>
+                        </a>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+                <!-- END API ACCESS PAGE -->
+
+            </div><!-- end #pagesContainer -->
+        </main>
+
+    <!-- API Key Reveal Modal — shown once on generation -->
+    <div id="apiKeyRevealModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4 hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <div class="bg-white rounded-2xl w-full max-w-md relative z-10 shadow-2xl">
+            <div class="p-6">
+                <div class="text-center mb-5">
+                    <div class="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-key text-2xl text-green-600"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-800">Your API Key</h3>
+                    <p class="text-sm text-red-600 font-semibold mt-1">Save this now — it will never be shown again</p>
+                </div>
+
+                <div class="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-4 mb-4">
+                    <p id="apiRevealKey" class="text-xs font-mono text-gray-800 break-all leading-relaxed select-all"></p>
+                </div>
+
+                <button id="apiCopyKeyBtn"
+                    class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-xl transition-colors mb-3 flex items-center justify-center gap-2">
+                    <i class="fas fa-copy"></i>
+                    <span id="apiCopyBtnText">Copy API Key</span>
+                </button>
+
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                    <p class="text-xs text-amber-700">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        Store this key securely as an environment variable. Do not share it or commit it to version control.
+                    </p>
+                </div>
+
+                <button id="apiRevealDoneBtn"
+                    class="w-full border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-2.5 rounded-xl transition-colors text-sm">
+                    I've saved my key — Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Revoke Confirm Modal -->
+    <div id="apiRevokeModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4 hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <div class="bg-white rounded-2xl w-full max-w-sm relative z-10 shadow-2xl">
+            <div class="p-6 text-center">
+                <div class="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-exclamation-triangle text-2xl text-red-600"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800 mb-2">Revoke API Key?</h3>
+                <p class="text-sm text-gray-500 mb-6">This will immediately invalidate your key. Any application using it will stop working until you generate a new key.</p>
+                <div class="flex gap-3">
+                    <button id="apiRevokeCancelBtn" class="flex-1 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-2.5 rounded-xl transition-colors text-sm">
+                        Cancel
+                    </button>
+                    <button id="apiRevokeConfirmBtn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">
+                        Yes, Revoke
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="orderDetailModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div id="orderDetailBackdrop" class="absolute inset-0 bg-black/50"></div>
+        <div class="bg-white rounded-2xl w-full max-w-md relative z-10 max-h-[90vh] overflow-y-auto">
+            <div class="sticky top-0 bg-white rounded-t-2xl px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 class="font-bold text-gray-800 text-base">Order Details</h3>
+                <button id="closeOrderDetailBtn" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+            <div id="orderDetailBody" class="p-5 space-y-4"></div>
+        </div>
+    </div>
+    
+    <!-- Mobile Sidebar -->
+    <aside id="mobileSidebar" class="mobile-sidebar fixed inset-y-0 left-0 w-72 bg-gray-900 text-white z-50 flex flex-col md:hidden overflow-hidden">
+        <!-- Inner wrapper with proper flex layout for scrolling -->
+        <div class="flex flex-col h-full overflow-hidden">
+            <div class="flex-shrink-0 p-4 border-b border-gray-700">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-lg bg-brand-600 flex items-center justify-center">
+                        <i class="fas fa-bolt"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg"><span class="text-brand-400">PRIME</span></h1>
+                        <p class="text-xs text-gray-400">CONNECT</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-shrink-0 p-4 border-b border-gray-700">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div>
+                        <p class="font-medium text-sm" id="mobileSidebarUserName">Loading...</p>
+                        <p class="text-xs text-gray-400">Online</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-shrink-0 p-4 border-b border-gray-700">
+                <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Wallet Balance</p>
+                <p class="text-2xl font-bold" id="mobileSidebarBalance">GH₵ 0.00</p>
+            </div>
+
+            <!-- Navigation - scrollable area -->
+            <nav class="flex-1 overflow-y-auto p-4">
+                <div class="space-y-1">
+                    <button data-page="dashboard" class="mobile-nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-home w-5 text-center"></i>
+                        <span>Dashboard</span>
+                    </button>
+                    <button data-page="purchase" class="mobile-nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-shopping-bag w-5 text-center"></i>
+                        <span>Buy Data</span>
+                    </button>
+                    <button data-page="topup" class="mobile-nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-wallet w-5 text-center"></i>
+                        <span>Add Funds</span>
+                    </button>
+                    <button data-page="history" class="mobile-nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-history w-5 text-center"></i>
+                        <span>History</span>
+                    </button>
+                    <button data-page="store" class="mobile-nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-store w-5 text-center"></i>
+                        <span>Store</span>
+                    </button>
+                    <button data-page="settings" class="mobile-nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-cog w-5 text-center"></i>
+                        <span>Settings</span>
+                    </button>
+                    <button data-page="api-access" class="mobile-nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-code w-5 text-center"></i>
+                        <span>API Access</span>
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Logout button - always visible at bottom -->
+            <div class="flex-shrink-0 p-4 border-t border-gray-700">
+                <button id="mobileLogout" class="w-full flex items-center justify-center space-x-2 p-3 rounded-lg bg-red-600 hover:bg-red-700 transition-colors text-white">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </div>
+    </aside>
+    
+    <!-- Purchase Modal -->
+    <div id="purchaseModal" class="modal fixed inset-0 z-50 items-center justify-center p-4 hidden">
+        <div class="absolute inset-0 bg-black/50" id="modalBackdrop"></div>
+        <div class="bg-white rounded-xl w-full max-w-md relative z-10">
+            <div class="p-5 border-b border-gray-100 flex justify-between items-center">
+                <h3 class="font-bold text-gray-800 text-lg">Confirm Purchase</h3>
+                <button id="closeModal" class="p-2 text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="p-5 space-y-4">
+                <div id="selectedBundle" class="bg-brand-50 border border-brand-200 rounded-lg p-4">
+                    <!-- Bundle info will be inserted here -->
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Recipient Phone Number *</label>
+                    <input type="tel" id="recipientPhone" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" placeholder="024xxxxxxx" required>
+                    <p class="text-xs text-gray-500 mt-1">Enter valid Ghana number</p>
+                </div>
+                
+                <div class="flex justify-between items-center pt-4 border-t border-gray-100">
+                    <div>
+                        <p class="text-sm text-gray-500">Total Cost</p>
+                        <p id="modalTotal" class="text-2xl font-bold text-gray-800">GH₵ 0.00</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm text-gray-500">New Balance</p>
+                        <p id="modalNewBalance" class="text-lg font-bold text-gray-700">GH₵ 0.00</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-5 border-t border-gray-100">
+                <button id="confirmPurchase" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 px-4 rounded-lg transition-colors">
+                    Confirm Purchase
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <!-- ── PIN Setup Banner (resellers only, shown when pin_set=false) ── -->
+<div id="pinSetupBanner" class="hidden fixed top-0 left-0 right-0 z-50 bg-amber-500 text-white px-4 py-3 flex items-center justify-between shadow-lg">
+  <div class="flex items-center gap-3">
+    <i class="fas fa-shield-alt text-white text-lg"></i>
+    <div>
+      <p class="font-semibold text-sm">Secure your withdrawals</p>
+      <p class="text-xs text-amber-100">Set a 4-digit Transaction PIN to protect your earnings</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <button id="pinBannerSetupBtn"
+      class="bg-white text-amber-600 font-semibold text-xs px-3 py-1.5 rounded-lg hover:bg-amber-50 transition-colors">
+      Set PIN Now
+    </button>
+    <button id="pinBannerDismissBtn"
+      class="text-white/80 hover:text-white ml-1">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+    
+    <!-- Floating WhatsApp FAB -->
+    <div id="waBubble" class="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40 flex flex-col items-end gap-2">
+
+        <!-- Option 2: Join Channel (shown when expanded) -->
+        <a id="waOptionChannel" href="https://whatsapp.com/channel/0029Vb6y5f76WaKgHSdSR13V" target="_blank" rel="noopener noreferrer"
+            class="wa-option hidden flex items-center gap-2 bg-white border border-green-200 text-gray-800 text-xs font-semibold px-3 py-2 rounded-full shadow-lg whitespace-nowrap transition-all">
+            <span class="w-7 h-7 rounded-full bg-green-500 text-white flex items-center justify-center flex-shrink-0">
+                <i class="fab fa-whatsapp text-sm"></i>
+            </span>
+            Join Our Channel
+        </a>
+
+        <!-- Option 1: Contact Admin (shown when expanded) -->
+        <a id="waOptionAdmin" href="https://wa.me/233548712699" target="_blank" rel="noopener noreferrer"
+            class="wa-option hidden flex items-center gap-2 bg-white border border-green-200 text-gray-800 text-xs font-semibold px-3 py-2 rounded-full shadow-lg whitespace-nowrap transition-all">
+            <span class="w-7 h-7 rounded-full bg-green-600 text-white flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-headset text-sm"></i>
+            </span>
+            Contact Admin
+        </a>
+
+        <!-- Main toggle button -->
+        <button id="waFabToggle"
+            class="w-14 h-14 bg-green-500 hover:bg-green-600 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all">
+            <i id="waFabIcon" class="fab fa-whatsapp text-2xl transition-transform duration-200"></i>
+        </button>
+    </div>
+
+    <style>
+        .wa-option { animation: waSlideIn .18s ease-out; }
+        @keyframes waSlideIn {
+            from { opacity: 0; transform: translateY(8px) scale(.95); }
+            to   { opacity: 1; transform: translateY(0)   scale(1);   }
+        }
+    </style>
+
+
+    <!-- Application Scripts -->
+    <!-- site-lock-check.js MUST come before dashboard-main.js so window.__siteLockReady -->
+    <!-- is a live Promise by the time the module's DOMContentLoaded handler awaits it.   -->
+    <script type="module" src="site-lock-check.js"></script>
+    <script type="module" src="dashboard-main.js?v=3"></script>
+
+
+<!-- Withdrawal Modal -->
+<div id="withdrawalModal" class="modal fixed inset-0 items-start justify-center p-4 hidden overflow-y-auto" style="z-index: 9999;">
+  <div class="fixed inset-0 bg-black/50" id="withdrawalModalBackdrop"></div>
+  <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md z-10 my-8">
+    <div class="bg-green-600 p-5 text-white">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold">Withdraw Profits</h2>
+          <p class="text-green-100 text-sm mt-0.5">Available: <span id="withdrawModalAvailable" class="font-bold text-white">GH₵0.00</span></p>
+        </div>
+        <button id="closeWithdrawalModal" class="p-2 rounded-full hover:bg-white/20 transition-colors">
+          <i class="fas fa-times text-lg"></i>
+        </button>
+      </div>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Amount to Withdraw (GH₵)</label>
+        <div class="flex gap-2">
+          <input type="number" id="withdrawAmount" placeholder="0.00" step="0.01" min="0.01"
+            class="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none">
+          <button id="withdrawMaxBtn"
+            class="px-3 py-2 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm font-semibold hover:bg-green-100 transition-colors whitespace-nowrap">
+            Max
+          </button>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Mobile Money Number</label>
+        <input type="tel" id="withdrawPhone" placeholder="e.g. 0241234567" maxlength="10"
+          class="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Name on Account</label>
+        <input type="text" id="withdrawRecipientName" placeholder="Name as it appears on the mobile money account"
+          class="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Network</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button data-net="MTN"
+            class="withdraw-net-btn border-2 border-gray-200 rounded-lg py-2 text-sm font-semibold text-gray-600 hover:border-yellow-400 hover:bg-yellow-50 transition-colors">MTN</button>
+          <button data-net="TELECEL"
+            class="withdraw-net-btn border-2 border-gray-200 rounded-lg py-2 text-sm font-semibold text-gray-600 hover:border-red-400 hover:bg-red-50 transition-colors">Telecel</button>
+          <button data-net="AIRTELTIGO"
+            class="withdraw-net-btn border-2 border-gray-200 rounded-lg py-2 text-sm font-semibold text-gray-600 hover:border-blue-400 hover:bg-blue-50 transition-colors">AirtelTigo</button>
+        </div>
+        <input type="hidden" id="withdrawNetwork" value="">
+      </div>
+      <button id="submitWithdrawal"
+        class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition-colors text-sm">
+        <i class="fas fa-paper-plane mr-2"></i>Submit Withdrawal Request
+      </button>
+    </div>
+  </div>
+</div>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- FULL-SCREEN STORE OVERLAY                                  -->
+    <!-- Appears above the entire dashboard when store is active.   -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <div id="storeOverlay">
+
+        <!-- ── Right sidebar (desktop only) ── -->
+        <aside id="storeSidebarLeft">
+            <!-- Store branding header (no button here) -->
+            <div style="padding:20px 16px 16px; border-bottom:1px solid rgba(255,255,255,0.1); flex-shrink:0;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:36px;height:36px;border-radius:10px;background:#0284c7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-store" style="color:#fff;font-size:14px;"></i>
+                    </div>
+                    <div style="min-width:0;">
+                        <p style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">My Store</p>
+                        <p id="sidebarStoreName" style="font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Nav items -->
+            <nav style="flex:1;padding:10px 8px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;">
+                <button id="sidebarBtn-mystore" class="store-right-nav-btn active">
+                    <i class="fas fa-th-large"></i> Overview
+                </button>
+                <button id="sidebarBtn-bundleprices" class="store-right-nav-btn">
+                    <i class="fas fa-tags"></i> My Pricing
+                </button>
+                <button id="sidebarBtn-recentorders" class="store-right-nav-btn">
+                    <i class="fas fa-receipt"></i> Sales
+                </button>
+                <button id="sidebarBtn-withdrawalhistory" class="store-right-nav-btn">
+                    <i class="fas fa-history"></i> History
+                </button>
+                <button id="sidebarWithdrawBtn" class="store-right-nav-btn">
+                    <i class="fas fa-money-bill-wave"></i> Withdraw
+                </button>
+                <button id="sidebarBtn-customization" class="store-right-nav-btn">
+                    <i class="fas fa-paint-brush"></i> Customization
+                </button>
+            </nav>
+            <!-- Bottom: Exit Store -->
+            <div style="padding:12px 8px;border-top:1px solid rgba(255,255,255,0.08);flex-shrink:0;">
+                <button id="exitStoreBtn1"
+                    style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:9px 12px;border-radius:10px;background:#7f1d1d;border:none;color:#fca5a5;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;">
+                    <i class="fas fa-arrow-left" style="font-size:12px;"></i> Exit Store
+                </button>
+            </div>
+        </aside>
+        <!-- ── Scrollable main content area ── -->
+        <div id="storeMainArea">
+
+            <!-- Mobile header bar (hamburger + title) -->
+            <div class="md:hidden flex items-center gap-3 mb-4">
+                <button id="openStoreDrawerBtn2" class="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-600 shadow-sm">
+                    <i class="fas fa-bars text-sm"></i>
+                </button>
+                <div class="flex-1 min-w-0">
+                    <h2 id="storeTabTitleOverlay" class="text-base font-bold text-gray-800 truncate">Overview</h2>
+                    <p class="text-xs text-gray-500">My Store Dashboard</p>
+                </div>
+                <button id="exitStoreBtn2" class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs font-semibold">
+                    <i class="fas fa-arrow-left text-xs"></i> Exit
+                </button>
+            </div>
+
+            <!-- Desktop page heading -->
+            <div class="hidden md:flex items-center justify-between mb-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800" id="storeOverlayHeading">My Store</h1>
+                    <p class="text-sm text-gray-500 mt-0.5" id="storeOverlaySubheading">Store Dashboard</p>
+                </div>
+            </div>
+
+            <!-- Paywall (shown when store not unlocked) -->
+            <div id="overlayStorePaywall" class="hidden">
+                <div class="max-w-2xl mx-auto">
+                    <div class="text-center mb-8">
+                        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-100 mb-4">
+                            <i class="fas fa-store text-3xl text-brand-600"></i>
+                        </div>
+                        <h2 class="text-3xl font-bold text-gray-800 mb-2">Unlock Your Reseller Store</h2>
+                        <p class="text-gray-500 text-lg">Start selling data bundles with your own branded store</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                        <div class="card p-5 flex gap-4 items-start">
+                            <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center flex-shrink-0"><i class="fas fa-link text-brand-600"></i></div>
+                            <div><p class="font-semibold text-gray-800 mb-1">Custom Store Link</p><p class="text-sm text-gray-500">Share your personalized store URL with customers</p></div>
+                        </div>
+                        <div class="card p-5 flex gap-4 items-start">
+                            <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center flex-shrink-0"><i class="fas fa-tags text-green-600"></i></div>
+                            <div><p class="font-semibold text-gray-800 mb-1">Set Your Own Prices</p><p class="text-sm text-gray-500">Customize bundle prices for maximum profits</p></div>
+                        </div>
+                        <div class="card p-5 flex gap-4 items-start">
+                            <div class="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0"><i class="fas fa-user-circle text-purple-600"></i></div>
+                            <div><p class="font-semibold text-gray-800 mb-1">Branded Experience</p><p class="text-sm text-gray-500">Your name displayed for customer recognition</p></div>
+                        </div>
+                        <div class="card p-5 flex gap-4 items-start">
+                            <div class="w-10 h-10 rounded-lg bg-yellow-50 flex items-center justify-center flex-shrink-0"><i class="fas fa-infinity text-yellow-600"></i></div>
+                            <div><p class="font-semibold text-gray-800 mb-1">Lifetime Access</p><p class="text-sm text-gray-500">One-time payment, no recurring fees</p></div>
+                        </div>
+                    </div>
+                    <div class="card p-8 text-center border-2 border-brand-200">
+                        <p class="text-sm font-semibold text-brand-600 uppercase tracking-wider mb-2">One-time Fee</p>
+                        <p class="text-5xl font-bold text-gray-800 mb-1">GH₵ 50.00</p>
+                        <p class="text-sm text-gray-500 mb-6">Deducted from your wallet balance</p>
+                        <div id="overlayPaywallBalanceInfo" class="mb-6 p-3 rounded-lg bg-gray-50 text-sm text-gray-600"></div>
+                        <button id="overlayUnlockStoreBtn"
+                            class="w-full bg-brand-600 hover:bg-brand-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-xl text-lg transition-all">
+                            <i class="fas fa-lock-open mr-2"></i>Unlock Store Now
+                        </button>
+                        <p class="text-xs text-gray-400 mt-3"><i class="fas fa-shield-alt mr-1"></i>Secure payment from your wallet balance</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Store content (shown when unlocked) -->
+            <div id="overlayStoreContent" class="hidden space-y-4">
+                <!-- Tab panels rendered here by JS -->
+            </div>
+
+        </div><!-- end #storeMainArea -->
+
+
+    <!-- ══ SIDE DRAWER for Store Menu (mobile-only, teleported to body by JS) ══ -->
+                        <div id="storeSideDrawer" style="display:none; position:fixed; inset:0; z-index:9999;">
+                            <!-- backdrop -->
+                            <div id="storeDrawerBackdrop" style="position:absolute; inset:0; background:rgba(0,0,0,0.55);"></div>
+                            <!-- panel -->
+                            <div id="storeDrawerPanel" style="position:absolute; left:0; top:0; height:100%; width:280px; background:#0f172a; color:#fff; display:flex; flex-direction:column; box-shadow:4px 0 24px rgba(0,0,0,0.4); transform:translateX(-100%); transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);">
+                                <!-- Header -->
+                                <div style="display:flex; align-items:center; justify-content:space-between; padding:18px 16px 16px; border-bottom:1px solid rgba(255,255,255,0.1); flex-shrink:0;">
+                                    <div style="display:flex; align-items:center; gap:10px;">
+                                        <div style="width:34px; height:34px; border-radius:10px; background:#0284c7; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                            <i class="fas fa-store" style="font-size:14px; color:#fff;"></i>
+                                        </div>
+                                        <span style="font-weight:700; font-size:15px; color:#fff;">My Store</span>
+                                    </div>
+                                    <!-- CLOSE BUTTON — always visible, high contrast -->
+                                    <button id="closeStoreDrawerBtn" style="width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="Close menu">
+                                        <i class="fas fa-times" style="font-size:15px; color:#fff;"></i>
+                                    </button>
+                                </div>
+                                <!-- Nav items -->
+                                <nav style="flex:1; padding:12px; overflow-y:auto; display:flex; flex-direction:column; gap:4px;">
+                                    <button id="drawerBtn-mystore" data-drawer-tab="mystore" style="width:100%; display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; background:rgba(255,255,255,0.12); color:#fff; font-weight:600; font-size:14px; text-align:left; border:none; cursor:pointer;">
+                                        <i class="fas fa-th-large" style="width:18px; text-align:center; font-size:14px;"></i> Overview
+                                    </button>
+                                    <button id="drawerBtn-bundleprices" data-drawer-tab="bundleprices" style="width:100%; display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; color:#94a3b8; font-weight:600; font-size:14px; text-align:left; border:none; cursor:pointer; background:transparent;">
+                                        <i class="fas fa-tags" style="width:18px; text-align:center; font-size:14px;"></i> My Pricing
+                                    </button>
+                                    <button id="drawerBtn-recentorders" data-drawer-tab="recentorders" style="width:100%; display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; color:#94a3b8; font-weight:600; font-size:14px; text-align:left; border:none; cursor:pointer; background:transparent;">
+                                        <i class="fas fa-receipt" style="width:18px; text-align:center; font-size:14px;"></i> Sales
+                                    </button>
+                                    <button id="drawerBtn-withdrawalhistory" data-drawer-tab="withdrawalhistory" style="width:100%; display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; color:#94a3b8; font-weight:600; font-size:14px; text-align:left; border:none; cursor:pointer; background:transparent;">
+                                        <i class="fas fa-history" style="width:18px; text-align:center; font-size:14px;"></i> History
+                                    </button>
+                                    <button id="drawerWithdrawBtn" style="width:100%; display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; color:#94a3b8; font-weight:600; font-size:14px; text-align:left; border:none; cursor:pointer; background:transparent;">
+                                        <i class="fas fa-money-bill-wave" style="width:18px; text-align:center; font-size:14px;"></i> Withdraw
+                                    </button>
+                                    <button id="drawerBtn-customization" data-drawer-tab="customization" style="width:100%; display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; color:#94a3b8; font-weight:600; font-size:14px; text-align:left; border:none; cursor:pointer; background:transparent;">
+                                        <i class="fas fa-paint-brush" style="width:18px; text-align:center; font-size:14px;"></i> Customization
+                                    </button>
+                                </nav>
+                            </div>
+                        </div>
+
+    </div><!-- end #storeOverlay -->
+
+
+<!-- ── Transaction PIN Verification Modal ─────────────────────────────── -->
+<div id="pinVerifyModal" class="hidden fixed inset-0 flex items-center justify-center p-4" style="z-index:10000;">
+  <div class="absolute inset-0 bg-black/60" id="pinVerifyBackdrop"></div>
+  <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 z-10">
+    <!-- Header -->
+    <div class="text-center mb-6">
+      <div class="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
+        <i class="fas fa-shield-alt text-amber-600 text-2xl"></i>
+      </div>
+      <h3 class="text-xl font-bold text-gray-900">Enter Transaction PIN</h3>
+      <p class="text-sm text-gray-500 mt-1">Required to authorise your withdrawal</p>
+    </div>
+
+    <!-- PIN dots display -->
+    <div class="flex justify-center gap-3 mb-6" id="pinDots">
+      <div class="pin-dot w-4 h-4 rounded-full border-2 border-gray-300 transition-all"></div>
+      <div class="pin-dot w-4 h-4 rounded-full border-2 border-gray-300 transition-all"></div>
+      <div class="pin-dot w-4 h-4 rounded-full border-2 border-gray-300 transition-all"></div>
+      <div class="pin-dot w-4 h-4 rounded-full border-2 border-gray-300 transition-all"></div>
+      <div class="pin-dot w-4 h-4 rounded-full border-2 border-gray-300 transition-all"></div>
+      <div class="pin-dot w-4 h-4 rounded-full border-2 border-gray-300 transition-all"></div>
+    </div>
+
+    <!-- Hidden actual input -->
+    <input type="password" id="pinVerifyInput" inputmode="numeric" maxlength="6"
+      pattern="[0-9]*" autocomplete="off"
+      class="sr-only" aria-label="Transaction PIN">
+
+    <!-- Numpad -->
+    <div class="grid grid-cols-3 gap-3 mb-4" id="pinNumpad">
+      <button class="pin-key py-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-xl font-semibold text-gray-800 transition-colors active:bg-gray-200" data-key="1">1</button>
+      <button class="pin-key py-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-xl font-semibold text-gray-800 transition-colors active:bg-gray-200" data-key="2">2</button>
+      <button class="pin-key py-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-xl font-semibold text-gray-800 transition-colors active:bg-gray-200" data-key="3">3</button>
+      <button class="pin-key py-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-xl font-semibold text-gray-800 transition-colors active:bg-gray-200" data-key="4">4</button>
+      <button class="pin-key py-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-xl font-semibold text-gray-800 transition-colors active:bg-gray-200" data-key="5">5</button>
+      <button class="pin-key py-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-xl font-semibold text-gray-800 transition-colors active:bg-gray-200" data-key="6">6</button>
+      <button class="pin-key py-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-xl font-semibold text-gray-800 transition-colors active:bg-gray-200" data-key="7">7</button>
+      <button class="pin-key py-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-xl font-semibold text-gray-800 transition-colors active:bg-gray-200" data-key="8">8</button>
+      <button class="pin-key py-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-xl font-semibold text-gray-800 transition-colors active:bg-gray-200" data-key="9">9</button>
+      <button id="closePinModalBtn" class="py-4 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-semibold transition-colors text-sm active:bg-red-200">Cancel</button>
+      <button class="pin-key py-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-xl font-semibold text-gray-800 transition-colors active:bg-gray-200" data-key="0">0</button>
+      <button id="pinBackspaceBtn" class="py-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors active:bg-gray-200">
+        <i class="fas fa-backspace text-lg"></i>
+      </button>
+    </div>
+
+    <!-- Error message -->
+    <p id="pinVerifyError" class="hidden text-center text-sm text-red-600 font-medium mb-2"></p>
+
+    <!-- Submit -->
+    <button id="pinVerifySubmit"
+      class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      disabled>
+      Confirm Withdrawal
+    </button>
+  </div>
+</div>
+
+<!-- ── CSP-safe event wiring — loaded from external file (covered by 'self') ── -->
+<script src="dashboard-event-wiring.js?v=3"></script>
+
+
+</body>
+</html>

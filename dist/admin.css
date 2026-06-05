@@ -1,0 +1,313 @@
+ /* Critical CSS matching dashboard */
+        :root {
+            --safe-area-inset-top: env(safe-area-inset-top);
+            --safe-area-inset-bottom: env(safe-area-inset-bottom);
+            --safe-area-inset-left: env(safe-area-inset-left);
+            --safe-area-inset-right: env(safe-area-inset-right);
+        }
+        
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        html {
+            font-size: 16px;
+            height: -webkit-fill-available;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        /* Safe area adjustments */
+        .safe-top {
+            padding-top: var(--safe-area-inset-top);
+        }
+        
+        .safe-bottom {
+            padding-bottom: var(--safe-area-inset-bottom);
+        }
+        
+        /* Touch-friendly sizes */
+        button,
+        .btn,
+        input,
+        select {
+            min-height: 44px;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
+        /* Ensure buttons are clickable */
+        .admin-nav-btn,
+        .filter-tab,
+
+        /* Provider Cards */
+        .provider-card {
+            border-color: #e2e8f0;
+            background: #f8fafc;
+        }
+        .provider-card.is-active {
+            border-color: #22c55e;
+            background: #f0fdf4;
+        }
+        .provider-card.is-active .provider-badge {
+            display: inline-flex !important;
+            align-items: center;
+        }
+        .switch-provider-btn {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+        .switch-provider-btn:hover {
+            background: #e2e8f0;
+        }
+        .provider-card.is-active .switch-provider-btn {
+            background: #dcfce7;
+            color: #16a34a;
+            border-color: #bbf7d0;
+            cursor: default;
+        }
+
+
+        /* Provider Cards */
+        .provider-card { border-color: #e2e8f0; background: #f8fafc; }
+        .provider-card.is-active { border-color: #22c55e; background: #f0fdf4; }
+        .provider-card.is-active .provider-badge { display: inline-flex !important; align-items: center; }
+        .switch-provider-btn { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+        .switch-provider-btn:hover { background: #e2e8f0; }
+        .provider-card.is-active .switch-provider-btn { background: #dcfce7; color: #16a34a; border-color: #bbf7d0; cursor: default; }
+
+        .view-order-btn,
+        .edit-balance-btn,
+        .approve-deposit-btn,
+        .decline-deposit-btn {
+            cursor: pointer !important;
+            pointer-events: auto !important;
+        }
+        
+        
+        /* Mobile-first responsive table */
+        .responsive-table {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+     .mobile-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobile-sidebar.open {
+    transform: translateX(0);
+}
+
+/* On desktop, reset the transform */
+@media (min-width: 768px) {
+    .mobile-sidebar {
+        transform: none !important;
+    }
+}
+
+
+        /* Status colors */
+       .status-success {
+    background-color: #dcfce7;
+    color: #166534;
+}
+
+.status-pending {
+    background-color: #fef9c3;
+    color: #854d0e;
+}
+
+.status-awaiting_payment {
+    background-color: #fef9c3;
+    color: #854d0e;
+    border: 1px solid #fde68a;
+}
+.status-processing {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+
+.status-failed {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.status-cancelled {
+    background-color: #f3f4f6;
+    color: #6b7280;
+}
+
+/* NEW STATUS TYPES */
+
+.status-failed_provider {
+    background-color: #fee2e2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+.status-processing_locked {
+    background-color: #ede9fe;
+    color: #6d28d9;
+    border: 1px solid #ddd6fe;
+}
+
+.status-manual_review {
+    background-color: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fed7aa;
+}
+        
+        /* Card styles */
+        .card {
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+        }
+        
+        /* Network colors */
+        .mtn-bg { background-color: #FFCC00; }
+        .airteltigo-bg { background-color: #004F9F; }
+        .telecel-bg { background-color: #E60000; }
+        
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            z-index: 9999;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            max-width: calc(100% - 2rem);
+        }
+        
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+        
+    /* Loading states */
+    .skeleton {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+    }
+
+    #loading-overlay {
+        pointer-events: none;
+    }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        /* Admin specific */
+        .admin-nav-active {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            border-left: 4px solid #0ea5e9;
+        }
+        
+        .guest-badge {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        
+        .stats-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+        
+        .stats-icon.revenue { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; }
+        .stats-icon.users { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; }
+        .stats-icon.guest { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+        .stats-icon.orders { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; }
+        
+        .pulse-alert {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        /* Hide scrollbar but keep functionality */
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        
+        /* Better focus styles */
+        .focus\:ring-brand:focus {
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.5);
+        }
+        
+        @media screen and (max-width: 768px) {
+            input[type="text"],
+            input[type="number"],
+            input[type="tel"],
+            input[type="password"],
+            select,
+            textarea {
+                font-size: 16px !important;
+            }
+        }
+
+        /* === SIDEBAR NAV BUTTONS - force transparent bg, white text === */
+        #adminSidebar button.admin-nav-btn {
+            background-color: transparent !important;
+            color: rgba(255, 255, 255, 0.88) !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        #adminSidebar button.admin-nav-btn:hover {
+            background-color: rgba(255,255,255,0.07) !important;
+            color: #fff !important;
+        }
+        #adminSidebar button.admin-nav-btn.admin-nav-active {
+            background-color: rgba(255,255,255,0.13) !important;
+            color: #fff !important;
+            border-left: 3px solid #38bdf8 !important;
+            font-weight: 600 !important;
+        }
+        /* Site Lock icon option selected state */
+        .lock-icon-opt:has(input:checked) { border-color: #0284c7; background: #eff6ff; color: #0284c7; }
+        .lock-icon-opt:has(input:checked) i { color: #0284c7; }
+        /* Site lock card locked state */
+        #dashboard-lock-card.is-locked { border-color: #ef4444; background: #fef2f2; }
+        #store-lock-card.is-locked     { border-color: #ef4444; background: #fef2f2; }
+        
+        .brand-gradient {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 50%, #0c4a6e 100%);
+}

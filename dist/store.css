@@ -1,0 +1,138 @@
+ /* ── CSS custom properties — overridden by JS from store settings ── */
+        :root {
+            --tc: #0284c7;       /* theme color */
+            --tc-dark: #0369a1;  /* slightly darker */
+            --tc-rgb: 2,132,199; /* for rgba() */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            transition: background .25s, color .25s;
+        }
+
+        /* ── Dark mode ───────────────────────────────────────── */
+        body.dark { background: #0f172a; color: #e2e8f0; }
+        body.dark header            { background: #1e293b !important; border-color: #334155 !important; }
+        body.dark #contactBar       { border-color: #334155 !important; }
+        body.dark .bg-white         { background: #1e293b !important; }
+        body.dark .bg-gray-50       { background: #0f172a !important; }
+        body.dark .border-gray-200,
+        body.dark .border-gray-300  { border-color: #334155 !important; }
+        body.dark .text-gray-800    { color: #f1f5f9 !important; }
+        body.dark .text-gray-700    { color: #cbd5e1 !important; }
+        body.dark .text-gray-600    { color: #94a3b8 !important; }
+        body.dark .text-gray-500    { color: #64748b !important; }
+        body.dark .text-gray-400    { color: #475569 !important; }
+        body.dark input             { background: #1e293b !important; border-color: #475569 !important; color: #e2e8f0 !important; }
+        body.dark .shadow-sm,
+        body.dark .shadow-2xl       { box-shadow: 0 2px 16px rgba(0,0,0,.5) !important; }
+        body.dark .bg-blue-50       { background: rgba(var(--tc-rgb),.12) !important; }
+        body.dark .bg-slate-800     { background: #0f172a !important; }
+
+        /* ── Theme-color helpers ─────────────────────────────── */
+        .tc-bg          { background-color: var(--tc) !important; }
+        .tc-bg-light    { background-color: rgba(var(--tc-rgb),.1) !important; }
+        .tc-border      { border-color:     var(--tc) !important; }
+        .tc-text        { color:            var(--tc) !important; }
+        .tc-btn {
+            background-color: var(--tc);
+            color: #fff;
+            transition: filter .15s;
+            cursor: pointer;
+            border: none;
+        }
+        .tc-btn:hover { filter: brightness(.88); }
+
+        /* ── Dark-mode toggle pill ───────────────────────────── */
+        .dm-pill {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: #f1f5f9; border: 1px solid #e2e8f0;
+            padding: 4px 10px; border-radius: 9999px; cursor: pointer;
+            user-select: none; font-size: 12px; font-weight: 600;
+            color: #64748b; transition: background .2s;
+        }
+        body.dark .dm-pill { background: #334155; border-color: #475569; color: #94a3b8; }
+        .dm-track {
+            width: 36px; height: 20px; background: #cbd5e1;
+            border-radius: 9999px; position: relative; transition: background .25s;
+        }
+        body.dark .dm-track { background: var(--tc); }
+        .dm-thumb {
+            position: absolute; width: 14px; height: 14px;
+            background: #fff; border-radius: 50%;
+            top: 3px; left: 3px; transition: left .2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,.25);
+        }
+        body.dark .dm-thumb { left: 19px; }
+
+        /* ── Network chips ───────────────────────────────────── */
+        .mtn-bg        { background-color: #FFCC00; }
+        .airteltigo-bg { background-color: #004F9F; color: white; }
+        .telecel-bg    { background-color: #E60000; color: white; }
+        .network-btn.selected {
+            border-color: var(--tc);
+            box-shadow: 0 0 0 3px rgba(var(--tc-rgb),.18);
+        }
+        .bundle-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,.15);
+        }
+
+        html, body { overflow-x: hidden; max-width: 100vw; }
+        button, input, select, textarea { min-height: 44px; }
+
+        /* ── Timeline ────────────────────────────────────────── */
+        .timeline-step { position: relative; }
+        .timeline-step:not(:last-child)::after {
+            content: ''; position: absolute;
+            left: 19px; top: 40px; width: 2px;
+            height: calc(100% - 8px); background: #e5e7eb;
+        }
+        .timeline-step.done:not(:last-child)::after        { background: #16a34a; }
+        .timeline-step.active-step:not(:last-child)::after { background: linear-gradient(to bottom,#2563eb,#e5e7eb); }
+        .step-icon {
+            width: 40px; height: 40px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; position: relative; z-index: 1;
+        }
+        @keyframes pulseRing {
+            0%   { box-shadow: 0 0 0   0 rgba(37,99,235,.4); }
+            70%  { box-shadow: 0 0 0 10px rgba(37,99,235,0);  }
+            100% { box-shadow: 0 0 0   0 rgba(37,99,235,0);   }
+        }
+        .step-icon.active-icon { animation: pulseRing 1.5s infinite; }
+        .store-view.hidden, .track-view.hidden { display: none; }
+
+        .brand-gradient {
+            background: linear-gradient(to right, #0c4a6e 0%, #0369a1 50%, #0c4a6e 100%);
+        }
+        .store-lock-overlay {
+    background: rgba(0,0,0,0.92);
+}
+
+.store-lock-icon-bg {
+    background: #dbeafe;
+}
+
+.store-lock-blue {
+    color: #2563eb;
+}
+
+.store-lock-title {
+    color: #1e293b;
+}
+
+.store-lock-message {
+    color: #64748b;
+}
+
+.store-lock-footer {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+.store-banner-gradient {
+    background: linear-gradient(135deg, var(--tc) 0%, var(--tc-dark) 100%);
+}

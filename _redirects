@@ -1,0 +1,12 @@
+/store      /store.html      200
+/dashboard  /dashboard.html  200
+/index      /index.html      200
+
+# ── Prime Connect Developer API — proxy to Supabase Edge Functions ──────────
+# Redirect API directly to Supabase instead of proxying
+/api/*  https://rpolemxgussziexdmdxe.supabase.co/functions/v1/:splat  200
+# ── Block old admin files — these no longer exist, return 404 ───────────────
+/admin.html                 /404    404
+/admin.js                   /404    404
+/supabase-admin-config.js   /404    404
+/zprx.html                  /zprx.html  200
