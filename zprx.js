@@ -881,17 +881,17 @@ async function loadGuestOrders() {
           const typeColor = isStore ? 'border-purple-400' : 'border-green-400';
           const badgeColor = isStore ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800';
           const iconColor = isStore ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600';
-          const effectiveStatus = order.status || 'unknown';
-  const isManualReview =
-  order.external_response?.manual_fallback === true;
+         const effectiveStatus = order.status || 'unknown';
+const isManualReview =
+  order.manual_fallback === true;
 
-  const displayStatus = isManualReview
+const displayStatus = isManualReview
   ? 'Manual Review'
   : effectiveStatus
       .replace(/_/g, ' ')
       .replace(/\b\w/g, c => c.toUpperCase());
 
- const statusColor =
+const statusColor =
   isManualReview
     ? 'bg-yellow-100 text-yellow-800'
     : effectiveStatus === 'completed'
