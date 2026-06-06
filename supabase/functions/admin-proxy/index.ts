@@ -46,7 +46,8 @@ const ALLOWED_TARGETS = new Set([
 const IS_PRODUCTION = Deno.env.get('ENVIRONMENT') === 'production';
 
 const ALLOWED_ORIGINS = new Set([
-  'https://primeconnect.site',
+  "https://primeconnect.site",
+  "https://primestacktec.netlify.app",
   ...( IS_PRODUCTION ? [] : [
     'http://127.0.0.1:5500',
     'http://127.0.0.1:5501',

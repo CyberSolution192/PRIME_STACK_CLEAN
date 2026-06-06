@@ -455,8 +455,8 @@ Deno.serve(async (req) => {
         withdrawnByOwner[w.user_id] = (withdrawnByOwner[w.user_id] || 0) + parseFloat(w.amount || 0);
       });
 
-      const owners = (users || []).map((u: any) => {
-        const store      = stores.find((s: any) => s.owner_id === u.id);
+      const owners = [];
+     for (const u of (users || [])) {        const store      = stores.find((s: any) => s.owner_id === u.id);
         const orders     = ordersByOwner[u.id] || [];
         const totalSales = orders.length;
 
@@ -502,12 +502,29 @@ Deno.serve(async (req) => {
           totalProfit += rowProfit;
         }
 
-        const totalWithdrawn  = withdrawnByOwner[u.id] || 0;
-        const availableProfit = Math.max(0, totalProfit - totalWithdrawn);
+      const totalWithdrawn  = withdrawnByOwner[u.id] || 0;
+const availableProfit = Math.max(0, totalProfit - totalWithdrawn);
 
-        return { ...u, store, totalSales, totalProfit, totalWithdrawn, availableProfit };
-      });
+// Keep stores table synchronized
+if (store) {
+  await supabase
+    .from("stores")
+    .update({
+      total_profit: Number(totalProfit.toFixed(2)),
+      available_profit: Number(availableProfit.toFixed(2))
+    })
+    .eq("id", store.id);
+}
 
+owners.push({
+  ...u,
+  store,
+  totalSales,
+  totalProfit,
+  totalWithdrawn,
+  availableProfit
+});
+}
       owners.sort((a: any, b: any) => b.totalProfit - a.totalProfit);
       return json({ success: true, owners });
     }

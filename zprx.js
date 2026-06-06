@@ -504,10 +504,19 @@
 
       let filtered = state.allOrders;
 
-      if (statusFilter !== 'all') {
-        filtered = filtered.filter((order) => order.status === statusFilter);
-      }
+    if (statusFilter !== 'all') {
 
+  if (statusFilter === 'manual_review') {
+    filtered = filtered.filter(
+      order => order.external_response?.manual_fallback === true
+    );
+  } else {
+    filtered = filtered.filter(
+      order => order.status === statusFilter
+    );
+  }
+
+}
       if (searchTerm) {
         filtered = filtered.filter((order) => {
           const searchable = [
@@ -4017,8 +4026,14 @@ let currentWithdrawalFilter = 'pending';
       const orderId = state._currentApiOrderId;
       if (!orderId) return;
       try {
-        const res  = await _adminFetch('admin-manage-orders', { action: 'update-status', orderId, status: newStatus });
-        const data = await res.json();
+   const res = await _adminFetch(
+    'admin-manage-api-keys',
+    {
+        action: 'update-status',
+        orderId,
+        status: newStatus
+    }
+    );        const data = await res.json();
         if (!data.success) throw new Error(data.message || 'Failed to update status');
         showToast('Order status updated successfully', 'success');
         closeModal('api-order-detail-modal');

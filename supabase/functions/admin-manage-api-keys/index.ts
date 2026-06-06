@@ -249,6 +249,33 @@ serve(async (req) => {
       },
     });
   }
+  // ═══════════════════════════════════════════════════════
+  // ACTION: update-status
+  // Temporary debug handler
+  // ═══════════════════════════════════════════════════════
 
+  if (action === "update-status") {
+
+    const orderId = (body.orderId as string | undefined)?.trim();
+    const status = (body.status as string | undefined)?.trim();
+
+    if (!orderId || !status) {
+      return json({
+        success: false,
+        message: "Missing orderId or status"
+      }, 400);
+    }
+
+    console.log(
+      `[admin-manage-api-keys] update-status: ${orderId} -> ${status}`
+    );
+
+    return json({
+      success: true,
+      message: "Debug handler reached successfully",
+      orderId,
+      status
+    });
+  }
   return json({ success: false, message: `Unknown action: ${action}` }, 400);
 });
