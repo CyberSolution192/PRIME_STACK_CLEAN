@@ -875,24 +875,27 @@ async function loadGuestOrders() {
           const badgeColor = isStore ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800';
           const iconColor = isStore ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600';
           const effectiveStatus = order.status || 'unknown';
-          const displayStatus =
-          effectiveStatus === 'manual_review'
-          ? 'Requires Attention'
-         : effectiveStatus.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const isManualReview =
+  order.external_response?.manual_fallback === true;
 
-const statusColor =
-  effectiveStatus === 'completed'
+  const displayStatus = isManualReview
+  ? 'Manual Review'
+  : effectiveStatus
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase());
+
+ const statusColor =
+  isManualReview
+    ? 'bg-yellow-100 text-yellow-800'
+    : effectiveStatus === 'completed'
     ? 'bg-green-100 text-green-800'
     : effectiveStatus === 'processing'
     ? 'bg-blue-100 text-blue-800'
-    : effectiveStatus === 'manual_review'
-    ? 'bg-yellow-100 text-yellow-800'
     : effectiveStatus === 'failed_provider'
     ? 'bg-red-100 text-red-800'
     : effectiveStatus === 'failed'
     ? 'bg-red-100 text-red-800'
     : 'bg-slate-100 text-slate-600';
-
           return `
             <div class="card p-4 border-l-4 ${typeColor}">
               <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">

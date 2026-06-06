@@ -229,13 +229,25 @@ serve(async (req) => {
   // ═══════════════════════════════════════════════════════
   if (action === "get-stats") {
     const [totalKeys, activeKeys, totalOrders, pendingOrders, completedOrders, failedOrders] = await Promise.all([
-      supabase.from("api_keys").select("id", { count: "exact", head: true }),
-      supabase.from("api_keys").select("id", { count: "exact", head: true }).eq("is_active", true),
-      supabase.from("api_orders").select("id", { count: "exact", head: true }),
-      supabase.from("api_orders").select("id", { count: "exact", head: true }).eq("status", "pending"),
-      supabase.from("api_orders").select("id", { count: "exact", head: true }).eq("status", "completed"),
-      supabase.from("api_orders").select("id", { count: "exact", head: true }).eq("status", "failed"),
-    ]);
+  supabase.from("api_keys").select("id", { count: "exact", head: true }),
+  supabase.from("api_keys").select("id", { count: "exact", head: true }).eq("is_active", true),
+  supabase.from("api_orders").select("id", { count: "exact", head: true }),
+
+  supabase
+    .from("api_orders")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["processing", "payment_pending"]),
+
+  supabase
+    .from("api_orders")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "completed"),
+
+  supabase
+    .from("api_orders")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "failed"),
+]);
 
     return json({
       success: true,
@@ -249,9 +261,9 @@ serve(async (req) => {
       },
     });
   }
-  // ═══════════════════════════════════════════════════════
+   // ═══════════════════════════════════════════════════════
   // ACTION: update-status
-  // Temporary debug handler
+  // Admin manually updates API order status
   // ═══════════════════════════════════════════════════════
 
   if (action === "update-status") {
@@ -265,16 +277,62 @@ serve(async (req) => {
         message: "Missing orderId or status"
       }, 400);
     }
+    const allowedStatuses = [
+      "processing",
+      "completed",
+      "failed",
+      "payment_pending"
+    ];
 
-    console.log(
-      `[admin-manage-api-keys] update-status: ${orderId} -> ${status}`
-    );
+    if (!allowedStatuses.includes(status)) {
+      return json({
+        success: false,
+        message: "Invalid status"
+      }, 400);
+    }
 
+    const { data: updatedOrder, error } = await supabase
+      .from("api_orders")
+      .update({
+        status,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", orderId)
+      .select("id, order_reference")
+      .maybeSingle();
+
+    if (error) {
+      console.error("[admin-manage-api-keys] update-status error:", error.message);
+      return json({
+        success: false,
+        message: "Failed to update order"
+      }, 500);
+    }
+
+    if (!updatedOrder) {
+      return json({
+        success: false,
+        message: "Order not found"
+      }, 404);
+    }
+    // Keep adminorders in sync
+    const { error: adminOrderError } = await supabase
+      .from("adminorders")
+      .update({
+        status,
+        updated_at: new Date().toISOString()
+      })
+      .eq("order_reference", updatedOrder.order_reference);
+
+    if (adminOrderError) {
+      console.error(
+        "[admin-manage-api-keys] adminorders sync error:",
+        adminOrderError.message
+      );
+    }
     return json({
       success: true,
-      message: "Debug handler reached successfully",
-      orderId,
-      status
+      message: "Order status updated successfully"
     });
   }
   return json({ success: false, message: `Unknown action: ${action}` }, 400);
