@@ -587,8 +587,7 @@
                 <div class="text-xs text-slate-500">${formatDate(
                   order.createdat || order.created_at
                 )}</div>
-             ${order.manual_fallback ? '<span class="text-xs text-orange-500 font-semibold"> Manual</span>' : ''}              </td>
-              <td class="px-5 py-4 text-sm text-slate-600">
+${order.external_response?.manual_fallback ? '<span class="text-xs text-orange-500 font-semibold"> Manual</span>' : ''}              <td class="px-5 py-4 text-sm text-slate-600">
                 <div class="font-medium">${esc(order.users?.fullname || order.users?.email || (order.external_response?.storeownerid ? '🏪 Store' : 'Guest'))}</div>
                 <div class="text-xs text-slate-400">${esc(order.recipient || order.guest_phone || '')}</div>
               </td>
@@ -605,18 +604,18 @@
               </td>
             <td class="px-5 py-4 whitespace-nowrap">
   <span class="px-2.5 py-1 rounded-full text-xs font-medium ${
-    order.manual_fallback
-      ? 'bg-yellow-100 text-yellow-800'
-      : statusClass
-  }">
-    ${
-      order.manual_fallback
-        ? 'Manual Review'
-        : (order.status || 'unknown')
-            .replace(/_/g, ' ')
-            .replace(/\b\w/g, c => c.toUpperCase())
-    }
-  </span>
+  order.external_response?.manual_fallback
+    ? 'bg-yellow-100 text-yellow-800'
+    : statusClass
+}">
+  ${
+    order.external_response?.manual_fallback
+      ? 'Manual Review'
+      : (order.status || 'unknown')
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase())
+  }
+</span>
 </td>
               <td class="px-5 py-4 whitespace-nowrap text-sm font-medium">
                 <button class="text-brand-600 hover:text-brand-800 mr-3 view-order-btn"
@@ -882,8 +881,8 @@ async function loadGuestOrders() {
           const badgeColor = isStore ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800';
           const iconColor = isStore ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600';
          const effectiveStatus = order.status || 'unknown';
-const isManualReview =
-  order.manual_fallback === true;
+ const isManualReview =
+  order.external_response?.manual_fallback === true;
 
 const displayStatus = isManualReview
   ? 'Manual Review'
