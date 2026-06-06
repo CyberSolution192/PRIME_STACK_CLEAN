@@ -504,18 +504,18 @@
 
       let filtered = state.allOrders;
 
-    if (statusFilter !== 'all') {
-
+   if (statusFilter !== 'all') {
   if (statusFilter === 'manual_review') {
     filtered = filtered.filter(
-      order => order.external_response?.manual_fallback === true
+      order =>
+        order.status === 'processing' &&
+        order.external_response?.manual_fallback === true
     );
   } else {
     filtered = filtered.filter(
       order => order.status === statusFilter
     );
   }
-
 }
       if (searchTerm) {
         filtered = filtered.filter((order) => {
@@ -587,8 +587,12 @@
                 <div class="text-xs text-slate-500">${formatDate(
                   order.createdat || order.created_at
                 )}</div>
-${order.external_response?.manual_fallback ? '<span class="text-xs text-orange-500 font-semibold"> Manual</span>' : ''}              <td class="px-5 py-4 text-sm text-slate-600">
-                <div class="font-medium">${esc(order.users?.fullname || order.users?.email || (order.external_response?.storeownerid ? '🏪 Store' : 'Guest'))}</div>
+${
+  order.status === 'processing' &&
+  order.external_response?.manual_fallback === true
+    ? '<span class="text-xs text-orange-500 font-semibold"> Manual</span>'
+    : ''
+}                <div class="font-medium">${esc(order.users?.fullname || order.users?.email || (order.external_response?.storeownerid ? '🏪 Store' : 'Guest'))}</div>
                 <div class="text-xs text-slate-400">${esc(order.recipient || order.guest_phone || '')}</div>
               </td>
               <td class="px-5 py-4 text-sm text-slate-700">
@@ -604,12 +608,18 @@ ${order.external_response?.manual_fallback ? '<span class="text-xs text-orange-5
               </td>
             <td class="px-5 py-4 whitespace-nowrap">
   <span class="px-2.5 py-1 rounded-full text-xs font-medium ${
-  order.external_response?.manual_fallback
+  (
+    order.status === 'processing' &&
+    order.external_response?.manual_fallback === true
+  )
     ? 'bg-yellow-100 text-yellow-800'
     : statusClass
 }">
   ${
-    order.external_response?.manual_fallback
+    (
+      order.status === 'processing' &&
+      order.external_response?.manual_fallback === true
+    )
       ? 'Manual Review'
       : (order.status || 'unknown')
           .replace(/_/g, ' ')
@@ -881,7 +891,8 @@ async function loadGuestOrders() {
           const badgeColor = isStore ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800';
           const iconColor = isStore ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600';
          const effectiveStatus = order.status || 'unknown';
- const isManualReview =
+const isManualReview =
+  order.status === 'processing' &&
   order.external_response?.manual_fallback === true;
 
 const displayStatus = isManualReview
