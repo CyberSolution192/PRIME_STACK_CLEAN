@@ -587,8 +587,7 @@
                 <div class="text-xs text-slate-500">${formatDate(
                   order.createdat || order.created_at
                 )}</div>
-                ${order.external_response?.manual_fallback ? '<span class="text-xs text-orange-500 font-semibold"> Manual</span>' : ''}
-              </td>
+             ${order.manual_fallback ? '<span class="text-xs text-orange-500 font-semibold"> Manual</span>' : ''}              </td>
               <td class="px-5 py-4 text-sm text-slate-600">
                 <div class="font-medium">${esc(order.users?.fullname || order.users?.email || (order.external_response?.storeownerid ? '🏪 Store' : 'Guest'))}</div>
                 <div class="text-xs text-slate-400">${esc(order.recipient || order.guest_phone || '')}</div>
@@ -604,13 +603,21 @@
               <td class="px-5 py-4 whitespace-nowrap text-sm font-medium text-slate-800">
                 ${formatCurrency(order.amount)}
               </td>
-              <td class="px-5 py-4 whitespace-nowrap">
-               <span class="px-2.5 py-1 rounded-full text-xs font-medium ${statusClass}">
-               ${(order.status || 'unknown')
-               .replace(/_/g, ' ')
-               .replace(/\b\w/g, c => c.toUpperCase())}
-               </span>
-              </td>
+            <td class="px-5 py-4 whitespace-nowrap">
+  <span class="px-2.5 py-1 rounded-full text-xs font-medium ${
+    order.manual_fallback
+      ? 'bg-yellow-100 text-yellow-800'
+      : statusClass
+  }">
+    ${
+      order.manual_fallback
+        ? 'Manual Review'
+        : (order.status || 'unknown')
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, c => c.toUpperCase())
+    }
+  </span>
+</td>
               <td class="px-5 py-4 whitespace-nowrap text-sm font-medium">
                 <button class="text-brand-600 hover:text-brand-800 mr-3 view-order-btn"
                         data-order-id="${esc(order.id)}"
