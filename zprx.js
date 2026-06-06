@@ -3812,8 +3812,21 @@ let currentWithdrawalFilter = 'pending';
           const phone  = esc(o.phone || o.recipient || '');
           const date   = formatDate(o.created_at);
 
-          const statusClass = `status-${(o.status || 'pending').toLowerCase().replace(/\s+/g, '-')}`;
-          const statusLabel = (o.status || 'pending').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+         const isManualReview =
+  o.status === 'processing' &&
+  o.manual_fallback === true;
+
+const statusClass = isManualReview
+  ? 'status-manual_review'
+  : `status-${(o.status || 'pending')
+      .toLowerCase()
+      .replace(/\s+/g, '-')}`;
+
+const statusLabel = isManualReview
+  ? 'Manual Review'
+  : (o.status || 'pending')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase());
 
           return `
             <tr>
