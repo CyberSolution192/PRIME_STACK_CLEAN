@@ -28,7 +28,8 @@ type Provider =
   | "pensite"
   | "hubnet"
   | "sparkdata"
-  | "databosshub";
+  | "databosshub"
+  | "up2u";
 
 interface ProviderResult {
   success: boolean;
@@ -154,6 +155,12 @@ function mapNetworkDataBossHub(
   }
 
   return network;
+}
+function mapNetworkUp2u(network: string): string {
+  if (network === "mtn")        return "mtn";
+  if (network === "telecel")    return "telecel";
+  if (network === "airteltigo") return "airteltigo";
+  return network.toLowerCase();
 }
 async function placeJusticeDataOrder(
   payload: OrderPayload
@@ -655,6 +662,62 @@ async function placeDataBossHubOrder(
     };
   }
 }
+async function placeUp2uOrder(payload: OrderPayload): Promise<ProviderResult> {
+  const apiKey = Deno.env.get("UP2U_API_KEY");
+  if (!apiKey) return { success: false, error: "Up2u API key not configured" };
+
+  const networkKey    = mapNetworkUp2u(payload.network);
+  const packageSizeMB = payload.bundleSize * 1000; // Up2u expects MB, internal size is GB
+
+  try {
+    console.log(`[Up2u] ${payload.orderId} — ${payload.network} ${payload.bundleSize}GB -> ${payload.phone}`);
+
+    const res = await fetch("https://fmulclzwaohrzznsgalg.supabase.co/functions/v1/public-api", {
+      method: "POST",
+      headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action:       "place_order",
+        network:      networkKey,
+        recipient:    payload.phone,
+        package_size: packageSizeMB,
+        order_id:     payload.orderId,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      let parsedErr: any = {};
+      try { parsedErr = JSON.parse(errorText); } catch { /* not JSON */ }
+      switch (res.status) {
+        case 401: return { success: false, error: "Up2u error: unauthorized (invalid or missing API key)" };
+        case 400: return { success: false, error: `Up2u error: bad_request — ${parsedErr.message || errorText}` };
+        case 402: return { success: false, error: "Up2u error: insufficient_balance (provider wallet too low)" };
+        case 404: return { success: false, error: "Up2u error: not_found (bundle or order not found)" };
+        case 429: return { success: false, error: "Up2u error: rate_limited — back off and retry" };
+        default:  return { success: false, error: `Up2u HTTP ${res.status}: ${errorText}` };
+      }
+    }
+
+    const data = await res.json();
+    if (data.status_code !== 200 || !data.response) {
+      return { success: false, error: `Up2u error: ${data.response?.message || data.message || "Unknown error"}` };
+    }
+
+    console.log(`[Up2u] Success:`, JSON.stringify(data));
+    return {
+      success: true,
+      data: {
+        ...data.response,
+        message:         data.response.message || "Order received and queued for processing.",
+        _provider:       "up2u",
+        _network_key:    networkKey,
+        _up2u_reference: data.response.order_reference,
+      },
+    };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Up2u unknown error" };
+  }
+}
 async function dispatchToProvider(
   provider: Provider,
   payload: OrderPayload
@@ -673,6 +736,9 @@ async function dispatchToProvider(
 
     case "databosshub":
       return await placeDataBossHubOrder(payload);
+
+    case "up2u":
+      return await placeUp2uOrder(payload);
 
     case "justicedata":
     default:

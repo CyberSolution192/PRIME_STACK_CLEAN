@@ -184,7 +184,7 @@ serve(async (req) => {
   if (req.method !== "POST") return json({ success: false, message: "Method not allowed" }, 405);
 
   const ARKESEL_API_KEY   = Deno.env.get("ARKESEL_API_KEY")?.trim();
-  const ARKESEL_SENDER_ID = Deno.env.get("ARKESEL_SENDER_ID") ?? "PRIMECONNECT";
+  const ARKESEL_SENDER_ID = Deno.env.get("ARKESEL_SENDER_ID") ?? "ESTECH";
   const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SRK      = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 

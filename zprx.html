@@ -179,6 +179,11 @@
     <span>Bundle Management</span>
 </button>
 
+<button data-page="checkers" class="admin-nav-btn w-full text-left flex items-center space-x-3 p-3 rounded-lg transition-colors">
+    <i class="fas fa-graduation-cap w-5 text-center"></i>
+    <span>Results Checkers</span>
+</button>
+
 <button data-page="custom-pricing" class="admin-nav-btn w-full text-left flex items-center space-x-3 p-3 rounded-lg transition-colors">
     <i class="fas fa-tags w-5 text-center"></i>
     <span>Custom Pricing</span>
@@ -258,6 +263,12 @@
                         </div>
                     </div>
                     <div class="flex items-center space-x-3">
+                        <div class="relative">
+                            <button id="notification-btn-mobile" class="p-2 text-slate-500 hover:text-brand-600 relative">
+                                <i class="far fa-bell text-xl"></i>
+                                <span id="notification-count-mobile" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center hidden">0</span>
+                            </button>
+                        </div>
                         <div class="text-right">
                             <p class="text-xs text-slate-500">Admin</p>
                             <p class="font-bold text-brand-600 text-sm truncate max-w-[100px]" id="mobile-admin-name">Loading...</p>
@@ -265,6 +276,16 @@
                         <div class="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-600">
                             <i class="fas fa-user-cog"></i>
                         </div>
+                    </div>
+                </div>
+                <!-- Mobile alerts panel (full-width, slides below header) -->
+                <div id="alerts-dropdown-mobile" class="hidden border-t border-slate-200 bg-white">
+                    <div class="flex items-center justify-between p-4 border-b border-slate-100">
+                        <h4 class="font-semibold text-slate-800 text-sm">System Alerts</h4>
+                        <span id="alerts-empty-label-mobile" class="text-xs text-slate-400 hidden">All clear</span>
+                    </div>
+                    <div id="alerts-list-mobile" class="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                        <!-- populated by loadAlerts() -->
                     </div>
                 </div>
             </header>
@@ -287,6 +308,16 @@
                             <i class="far fa-bell text-xl"></i>
                             <span id="notification-count" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center hidden">0</span>
                         </button>
+                        <!-- Admin alerts dropdown (price drift / stuck orders from background jobs) -->
+                        <div id="alerts-dropdown" class="hidden absolute right-0 mt-2 w-96 max-w-[90vw] bg-white rounded-xl shadow-lg border border-slate-200 z-50">
+                            <div class="flex items-center justify-between p-4 border-b border-slate-100">
+                                <h4 class="font-semibold text-slate-800 text-sm">System Alerts</h4>
+                                <span id="alerts-empty-label" class="text-xs text-slate-400 hidden">All clear</span>
+                            </div>
+                            <div id="alerts-list" class="max-h-96 overflow-y-auto divide-y divide-slate-100">
+                                <!-- populated by loadAlerts() -->
+                            </div>
+                        </div>
                     </div>
                     <div class="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 border border-brand-200">
                         <i class="fas fa-user-cog"></i>
@@ -333,6 +364,25 @@
                                 <button onclick="admin.navigateTo('all-orders')" class="mt-3 bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors">
                                     <i class="fas fa-list mr-1"></i> View Orders Requiring Attention
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Reconciliation Backlog Health Banner -->
+                    <!-- Shows only when stale payment_pending orders are building up faster than
+                         reconcile-pending-payments can clear them — an early signal, well before
+                         the backend's own 50-order CRITICAL alert threshold, that checkout volume
+                         may be outpacing the job's current batch size/schedule. -->
+                    <div id="payment-backlog-warning" class="hidden">
+                        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <i class="fas fa-clock text-amber-600"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-amber-800">⏳ Payment Reconciliation Backlog Building Up</h4>
+                                <p class="text-sm text-amber-700 mt-0.5">
+                                    <span id="payment-backlog-count" class="font-bold">0</span> order(s) are stuck in payment_pending waiting to be checked against Paystack. This clears automatically every 15 minutes — if this number keeps climbing across refreshes, it may be worth increasing the reconciliation job's batch size or running it more often.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -535,10 +585,26 @@
                             </div>
                         </div>
                         
+                        <div id="orders-bulk-toolbar" class="hidden items-center justify-between gap-3 mb-4 px-4 py-3 bg-brand-50 border border-brand-200 rounded-lg">
+                            <p class="text-sm font-medium text-brand-800">
+                                <span id="orders-selected-count">0</span> order(s) selected
+                            </p>
+                            <div class="flex gap-2">
+                                <button id="orders-bulk-clear" class="px-3 py-2 text-sm text-slate-600 hover:text-slate-800">
+                                    Clear
+                                </button>
+                                <button id="orders-bulk-complete" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg text-sm">
+                                    <i class="fas fa-check-double mr-2"></i>Mark Selected as Completed
+                                </button>
+                            </div>
+                        </div>
                         <div class="responsive-table">
                             <table class="w-full">
                                 <thead class="bg-slate-50">
                                     <tr>
+                                        <th class="px-5 py-3 text-left">
+                                            <input type="checkbox" id="orders-select-all" class="rounded border-slate-300">
+                                        </th>
                                         <th class="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Order ID</th>
                                         <th class="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Customer</th>
                                         <th class="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Network</th>
@@ -1426,7 +1492,7 @@
                                     </div>
 
                                     <!-- Provider Cards -->
-                                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4" id="provider-cards">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4" id="provider-cards">
 
                                         <!-- Justice Data Shop -->
                                         <div class="provider-card rounded-xl border-2 p-4 transition-all" data-provider="justicedata">
@@ -1510,6 +1576,23 @@
                                             <p class="text-xs text-slate-500 mb-4">bbhubportal.com · X-API-Key</p>
                                             <button class="switch-provider-btn w-full py-2 px-3 rounded-lg text-sm font-medium transition-colors" data-provider="databosshub">
                                                 Switch to DataBossHub
+                                            </button>
+                                        </div>
+
+                                        <!-- Up2u -->
+                                        <div class="provider-card rounded-xl border-2 p-4 transition-all" data-provider="up2u">
+                                            <div class="flex items-start justify-between mb-3">
+                                                <div class="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center">
+                                                    <i class="fas fa-satellite-dish text-indigo-500"></i>
+                                                </div>
+                                                <span class="provider-badge hidden text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">
+                                                    <i class="fas fa-check-circle mr-1"></i>Active
+                                                </span>
+                                            </div>
+                                            <h4 class="font-bold text-slate-800 mb-1">Up2u</h4>
+                                            <p class="text-xs text-slate-500 mb-4">Up2u API · X-API-Key</p>
+                                            <button class="switch-provider-btn w-full py-2 px-3 rounded-lg text-sm font-medium transition-colors" data-provider="up2u">
+                                                Switch to Up2u
                                             </button>
                                         </div>
 
@@ -1746,6 +1829,63 @@
                             <button id="add-first-bundle-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 px-6 rounded-lg transition-colors text-sm">
                                 <i class="fas fa-plus mr-2"></i> Add First Bundle
                             </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CHECKERS PAGE -->
+                <div id="checkers-page" class="page hidden p-4 md:p-6 space-y-6">
+                    <div class="card p-5">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="font-bold text-slate-800 text-lg">Checker Pricing</h3>
+                            <button id="refresh-checker-products-btn" class="text-sm text-brand-600 hover:text-brand-700 font-medium">
+                                <i class="fas fa-rotate-right mr-1"></i>Refresh
+                            </button>
+                        </div>
+                        <div id="checker-products-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                            <h3 class="font-bold text-slate-800 text-lg">Checker Orders</h3>
+                            <div class="flex items-center gap-2">
+                                <select id="checker-orders-status-filter" class="text-sm border border-slate-300 rounded-lg px-3 py-2">
+                                    <option value="">All statuses</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="manual_review">Manual Review</option>
+                                    <option value="failed">Failed</option>
+                                    <option value="refunded">Refunded</option>
+                                </select>
+                                <button id="refresh-checker-orders-btn" class="text-sm text-brand-600 hover:text-brand-700 font-medium">
+                                    <i class="fas fa-rotate-right mr-1"></i>Refresh
+                                </button>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left">Reference</th>
+                                        <th class="px-4 py-3 text-left">Product</th>
+                                        <th class="px-4 py-3 text-left">Amount</th>
+                                        <th class="px-4 py-3 text-left">Serial</th>
+                                        <th class="px-4 py-3 text-left">PIN</th>
+                                        <th class="px-4 py-3 text-left">Status</th>
+                                        <th class="px-4 py-3 text-left">Date</th>
+                                        <th class="px-4 py-3 text-left">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="checker-orders-tbody" class="divide-y divide-slate-100">
+                                    <!-- Populated by JavaScript -->
+                                </tbody>
+                            </table>
+                            <div id="checker-orders-empty-state" class="text-center py-12 hidden">
+                                <i class="fas fa-inbox text-4xl text-slate-300 mb-4"></i>
+                                <p class="text-slate-600 font-medium">No checker orders found</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2798,6 +2938,102 @@
     </div>
 
 
+
+    <!-- Checker Product Modal -->
+    <div id="checker-product-modal" class="fixed inset-0 z-[999] hidden items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50" id="checker-product-modal-backdrop"></div>
+        <div class="bg-white rounded-xl w-full max-w-md relative z-10">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-slate-800 text-lg">Edit Checker Pricing</h3>
+                <button id="close-checker-product-modal" class="p-2">
+                    <i class="fas fa-times text-slate-500"></i>
+                </button>
+            </div>
+
+            <form id="checker-product-form" class="p-5 space-y-4">
+                <input type="hidden" id="checker-product-id">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Name</label>
+                    <input type="text" id="checker-product-name" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">DataBossHub Category</label>
+                    <input type="text" id="checker-product-dbh-category" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" placeholder="e.g. BECE" required>
+                    <p class="text-xs text-slate-500 mt-1">Must match the exact category string DataBossHub's API expects.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Cost Price (GH₵)</label>
+                    <input type="number" id="checker-product-cost-price" step="0.01" min="0" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Selling Price (GH₵)</label>
+                    <input type="number" id="checker-product-selling-price" step="0.01" min="0" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" required>
+                </div>
+                <div>
+                    <label class="flex items-center">
+                        <input type="checkbox" id="checker-product-active" class="h-4 w-4 text-brand-600 focus:ring-brand-500 border-slate-300 rounded">
+                        <span class="ml-2 text-sm text-slate-700">Active (available for purchase)</span>
+                    </label>
+                </div>
+                <div class="flex space-x-3 pt-4">
+                    <button type="button" id="cancel-checker-product-edit" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium py-3 px-4 rounded-lg transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-medium py-3 px-4 rounded-lg transition-colors">
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Checker Order Resolve Modal -->
+    <div id="checker-resolve-modal" class="fixed inset-0 z-[999] hidden items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50" id="checker-resolve-modal-backdrop"></div>
+        <div class="bg-white rounded-xl w-full max-w-md relative z-10">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-slate-800 text-lg">Resolve Order</h3>
+                <button id="close-checker-resolve-modal" class="p-2">
+                    <i class="fas fa-times text-slate-500"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <p class="text-sm text-slate-500">Reference: <span id="checker-resolve-reference" class="font-mono text-slate-700"></span></p>
+
+                <div class="flex bg-slate-100 rounded-lg p-1">
+                    <button type="button" data-resolve-mode="complete" class="checker-resolve-mode-tab active flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-white text-slate-800 shadow">Complete manually</button>
+                    <button type="button" data-resolve-mode="refund" class="checker-resolve-mode-tab flex-1 px-3 py-2 rounded-lg text-sm font-medium text-slate-600">Refund customer</button>
+                </div>
+
+                <div id="checker-resolve-complete-fields" class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Serial Number</label>
+                        <input type="text" id="checker-resolve-serial" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">PIN</label>
+                        <input type="text" id="checker-resolve-pin" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Exam Date (optional)</label>
+                        <input type="text" id="checker-resolve-exam-date" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Results Link (optional)</label>
+                        <input type="text" id="checker-resolve-results-link" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg">
+                    </div>
+                </div>
+
+                <div id="checker-resolve-refund-notice" class="hidden bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3">
+                    This credits the customer's wallet the full order amount and marks the order as refunded.
+                </div>
+
+                <button id="submit-checker-resolve-btn" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-3 px-4 rounded-lg transition-colors">
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Toast Container -->
     <div id="toast-container"></div>

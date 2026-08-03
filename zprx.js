@@ -81,6 +81,7 @@
       storeSales: [],
       userOrders: [],
       filteredOrders: [],
+      selectedOrderIds: new Set(),
       pendingDeposits: [],
       users: [],
       bundles: [],
@@ -204,6 +205,7 @@
         'user-profits': 'User Profits',
         withdrawals: 'Withdrawals',
        bundles: 'Bundle Management',
+        checkers: 'Results Checkers',
         'custom-pricing': 'Custom Pricing',
         analytics: 'Sales Analytics',
         'api-keys': 'API Keys',
@@ -242,6 +244,9 @@
         break;
     case 'bundles':
         loadBundles();
+        break;
+    case 'checkers':
+        loadCheckersAdmin();
         break;
     case 'send-sms':
         checkSMSBalance();
@@ -313,7 +318,7 @@
         const result = await res.json();
         if (!result.success) throw new Error(result.message);
 
-        const { revenue, orders, users, manualPending } = result;
+        const { revenue, orders, users, manualPending, paymentBacklog } = result;
 
         // Revenue
         const totalEl = document.getElementById('total-revenue');
@@ -391,6 +396,20 @@
             if (warningBanner) warningBanner.classList.add('hidden');
           }
         }
+
+        // Payment reconciliation backlog banner — shown early (>10) as a
+        // heads-up, well before the backend's own CRITICAL alert at 50.
+        {
+          const backlogBanner = document.getElementById('payment-backlog-warning');
+          const backlogCountEl = document.getElementById('payment-backlog-count');
+          const backlogValue = paymentBacklog || 0;
+
+          if (backlogCountEl) backlogCountEl.textContent = backlogValue;
+          if (backlogBanner) {
+            if (backlogValue > 10) backlogBanner.classList.remove('hidden');
+            else backlogBanner.classList.add('hidden');
+          }
+        }
       } catch (error) {
         console.error('Error loading dashboard stats:', error);
       }
@@ -442,9 +461,19 @@
 
         tbody.innerHTML = transactions
           .map((tx) => {
-            const statusClass = `status-${tx.status
-              .toLowerCase()
-              .replace(/\s+/g, '-')}`;
+            // Derive the display status — manual_review is now stored directly in the DB,
+            // but legacy orders may still have status=processing + manual_fallback=true.
+            // Support both cases so old and new orders render consistently.
+            const isManualReview =
+              tx.status === 'manual_review' ||
+              (tx.status === 'processing' && tx.external_response?.manual_fallback === true);
+
+            const displayStatus = isManualReview ? 'manual_review' : (tx.status || 'pending');
+            const statusClass = `status-${displayStatus.toLowerCase().replace(/\s+/g, '-')}`;
+            const statusLabel = displayStatus
+              .replace(/_/g, ' ')
+              .replace(/\b\w/g, c => c.toUpperCase());
+
            const customer = esc(tx.users?.fullname || tx.users?.email ||
               (tx.external_response?.storeownerid ? '🏪 Store Sale' : 'Guest'));
             const phone = esc(tx.users?.phone || tx.recipient || 'N/A');
@@ -468,9 +497,7 @@
                 </td>
                 <td class="px-5 py-4 whitespace-nowrap">
                   <span class="px-2.5 py-1 rounded-full text-xs font-medium ${statusClass}">
-                ${(tx.status || 'pending')
-                 .replace(/_/g, ' ')
-               .replace(/\b\w/g, c => c.toUpperCase())}            
+                ${statusLabel}
                  </span>
                 </td>
               </tr>
@@ -484,61 +511,72 @@
 
     // All Orders
   async function loadAllOrders() {
+      state.ordersPage = 1;
+      await refreshAllOrders();
+    }
+
+    // Debounce helper — avoids firing a network request on every keystroke.
+    function debounce(fn, delayMs) {
+      let timer = null;
+      return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), delayMs);
+      };
+    }
+
+    // Actually queries the backend with the current search term and status
+    // filter, instead of filtering a stale client-side snapshot. This fixes
+    // a real bug: with well over 500 total orders now, the old approach
+    // (fetch the 500 most recent once, filter forever in the browser) meant
+    // a customer's own orders could be completely invisible to search if
+    // they simply weren't recent enough to be in that first page.
+    async function refreshAllOrders() {
       try {
-        const res = await _adminFetch('admin-manage-orders', { action: 'list', pageSize: 500, page: 1 });
+        const searchInput = document.getElementById('orders-search');
+        const filterSelect = document.getElementById('orders-filter');
+        const searchTerm = (searchInput?.value || '').trim();
+        const statusFilter = filterSelect?.value || 'all';
+
+        // 'manual_review' is a virtual/heuristic filter on the frontend (it
+        // also has to catch legacy rows stored as status='processing' with
+        // manual_fallback=true, not just literal status='manual_review'), so
+        // for that one case we still do a client-side pass after fetching —
+        // everything else now goes straight to the backend.
+        const isVirtualManualReview = statusFilter === 'manual_review';
+
+        const params = {
+          action: 'list',
+          pageSize: 500,
+          page: 1,
+        };
+        if (searchTerm) params.search = searchTerm;
+        if (statusFilter !== 'all' && !isVirtualManualReview) params.status = statusFilter;
+
+        const res = await _adminFetch('admin-manage-orders', params);
         const result = await res.json();
         if (!result.success) throw new Error(result.message);
-        state.allOrders = result.orders || [];
-        applyOrderFilters();
+
+        let orders = result.orders || [];
+        if (isVirtualManualReview) {
+          orders = orders.filter(
+            order => order.status === 'processing' && order.external_response?.manual_fallback === true
+          );
+        }
+
+        state.allOrders = orders;
+        state.filteredOrders = orders;
+        renderOrders();
       } catch (error) {
         console.error('Error loading all orders:', error);
         showToast('Failed to load orders', 'error');
       }
     }
 
-    function applyOrderFilters() {
-      const searchInput = document.getElementById('orders-search');
-      const filterSelect = document.getElementById('orders-filter');
-      const searchTerm = (searchInput?.value || '').toLowerCase();
-      const statusFilter = filterSelect?.value || 'all';
+    const debouncedRefreshAllOrders = debounce(() => {
+      state.ordersPage = 1;
+      refreshAllOrders();
+    }, 350);
 
-      let filtered = state.allOrders;
-
-   if (statusFilter !== 'all') {
-  if (statusFilter === 'manual_review') {
-    filtered = filtered.filter(
-      order =>
-        order.status === 'processing' &&
-        order.external_response?.manual_fallback === true
-    );
-  } else {
-    filtered = filtered.filter(
-      order => order.status === statusFilter
-    );
-  }
-}
-      if (searchTerm) {
-        filtered = filtered.filter((order) => {
-          const searchable = [
-            order.id,
-            order.description,
-            order.users?.fullname,
-            order.users?.email,
-            order.users?.phone,
-            order.details?.phoneNumber,
-            order.details?.network,
-            order.status
-          ]
-            .join(' ')
-            .toLowerCase();
-
-          return searchable.includes(searchTerm);
-        });
-      }
-
-      state.filteredOrders = filtered;
-      renderOrders();
-    }
 
     function renderOrders() {
       const tbody = document.getElementById('all-orders-body');
@@ -564,7 +602,7 @@
       if (pageData.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="7" class="px-5 py-8 text-center text-slate-400">
+            <td colspan="8" class="px-5 py-8 text-center text-slate-400">
               <i class="fas fa-search text-2xl mb-2 opacity-30"></i>
               <p>No orders found</p>
               <p class="text-sm text-slate-500 mt-1">Try adjusting your search or filter</p>
@@ -576,29 +614,36 @@
 
       tbody.innerHTML = pageData
         .map((order) => {
-          const statusClass = `status-${(order.status || 'pending')
-            .toLowerCase()
-            .replace(/\s+/g, '-')}`;
+          // Support both new DB status ('manual_review') and legacy rows
+          // (status='processing' + manual_fallback=true) so old orders render correctly.
+          const isManualReview =
+            order.status === 'manual_review' ||
+            (order.status === 'processing' && order.external_response?.manual_fallback === true);
+
+          const displayStatus = isManualReview ? 'manual_review' : (order.status || 'pending');
+          const statusClass   = `status-${displayStatus.toLowerCase().replace(/\s+/g, '-')}`;
+          const statusLabel   = displayStatus.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+          const customerName  = esc(order.users?.fullname || order.users?.email || (order.external_response?.storeownerid ? '🏪 Store' : 'Guest'));
+          const customerPhone = esc(order.recipient || order.users?.phone || '');
+          const isChecked     = state.selectedOrderIds?.has(order.id) ? 'checked' : '';
 
           return `
-            <tr>
+            <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+              <td class="px-5 py-4">
+                <input type="checkbox" class="order-select-checkbox rounded border-slate-300" data-order-id="${esc(order.id)}" ${isChecked}>
+              </td>
               <td class="px-5 py-4">
                 <div class="text-sm font-medium text-slate-900">${esc(order.order_reference || order.orderreference || `GST-${order.id.substring(0, 8)}`)}</div>
-                <div class="text-xs text-slate-500">${formatDate(
-                  order.createdat || order.created_at
-                )}</div>
-${
-  order.status === 'processing' &&
-  order.external_response?.manual_fallback === true
-    ? '<span class="text-xs text-orange-500 font-semibold"> Manual</span>'
-    : ''
-}                <div class="font-medium">${esc(order.users?.fullname || order.users?.email || (order.external_response?.storeownerid ? '🏪 Store' : 'Guest'))}</div>
-                <div class="text-xs text-slate-400">${esc(order.recipient || order.guest_phone || '')}</div>
+                <div class="text-xs text-slate-500">${formatDate(order.createdat || order.created_at)}</div>
+                ${isManualReview ? '<span class="text-xs text-orange-500 font-semibold">Manual</span>' : ''}
               </td>
               <td class="px-5 py-4 text-sm text-slate-700">
-                <span class="px-2 py-1 rounded text-xs ${
-                  (order.network || 'unknown').toLowerCase()
-                }-bg text-white">
+                <div class="font-medium text-slate-800">${customerName}</div>
+                <div class="text-xs text-slate-400">${customerPhone}</div>
+              </td>
+              <td class="px-5 py-4 text-sm text-slate-700">
+                <span class="px-2 py-1 rounded text-xs ${(order.network || 'unknown').toLowerCase()}-bg text-white">
                   ${esc((order.network || 'UNKNOWN').toUpperCase())}
                 </span>
               </td>
@@ -606,29 +651,13 @@ ${
               <td class="px-5 py-4 whitespace-nowrap text-sm font-medium text-slate-800">
                 ${formatCurrency(order.amount)}
               </td>
-            <td class="px-5 py-4 whitespace-nowrap">
-  <span class="px-2.5 py-1 rounded-full text-xs font-medium ${
-  (
-    order.status === 'processing' &&
-    order.external_response?.manual_fallback === true
-  )
-    ? 'bg-yellow-100 text-yellow-800'
-    : statusClass
-}">
-  ${
-    (
-      order.status === 'processing' &&
-      order.external_response?.manual_fallback === true
-    )
-      ? 'Manual Review'
-      : (order.status || 'unknown')
-          .replace(/_/g, ' ')
-          .replace(/\b\w/g, c => c.toUpperCase())
-  }
-</span>
-</td>
+              <td class="px-5 py-4 whitespace-nowrap">
+                <span class="px-2.5 py-1 rounded-full text-xs font-medium ${statusClass}">
+                  ${statusLabel}
+                </span>
+              </td>
               <td class="px-5 py-4 whitespace-nowrap text-sm font-medium">
-                <button class="text-brand-600 hover:text-brand-800 mr-3 view-order-btn"
+                <button class="text-brand-600 hover:text-brand-800 view-order-btn"
                         data-order-id="${esc(order.id)}"
                         data-order-type="guest">
                   View
@@ -638,6 +667,8 @@ ${
           `;
         })
         .join('');
+
+      if (typeof updateOrdersBulkToolbar === 'function') updateOrdersBulkToolbar();
     }
 
     // Guest Orders
@@ -1254,6 +1285,7 @@ const statusColor =
       hubnet:       'Hubnet',
       sparkdata:    'Spark Data GH',
       databosshub:  'DataBossHub',
+      up2u:         'Up2u',
     };
 
     async function loadProviderSettings() {
@@ -1734,6 +1766,241 @@ const statusColor =
         .join('');
     }
 
+    // ── Checker Admin Functions ──────────────────────────────────────────
+    async function loadCheckersAdmin() {
+      await Promise.all([loadCheckerProducts(), loadCheckerOrders()]);
+    }
+
+    async function loadCheckerProducts() {
+      try {
+        const res = await _adminFetch('admin-manage-checkers', { action: 'list-products' });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.message || 'Failed to load checker products');
+        state.checkerProducts = result.products || [];
+        renderCheckerProducts(state.checkerProducts);
+      } catch (error) {
+        console.error('Error loading checker products:', error);
+        showToast('Failed to load checker products', 'error');
+      }
+    }
+
+    function renderCheckerProducts(products) {
+      const grid = document.getElementById('checker-products-grid');
+      if (!grid) return;
+
+      if (!products || products.length === 0) {
+        grid.innerHTML = `<p class="text-slate-500 text-sm col-span-full text-center py-8">No checker products found.</p>`;
+        return;
+      }
+
+      grid.innerHTML = products.map((p) => `
+        <div class="card p-5">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <h4 class="font-bold text-slate-800">${esc(p.name)}</h4>
+              <p class="text-xs text-slate-500">DataBossHub category: ${esc(p.dbh_category)}</p>
+            </div>
+            <button class="edit-checker-product-btn p-2 text-slate-400 hover:text-brand-600 transition-colors" data-product-id="${esc(p.id)}" title="Edit">
+              <i class="fas fa-edit"></i>
+            </button>
+          </div>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-slate-600">Cost:</span><span class="font-medium">${formatCurrency(p.cost_price)}</span></div>
+            <div class="flex justify-between"><span class="text-slate-600">Selling price:</span><span class="font-bold text-green-600">${formatCurrency(p.selling_price)}</span></div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-600">Status:</span>
+              <span class="px-2 py-1 rounded-full text-xs font-medium ${p.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                ${p.is_active ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function openCheckerProductModal(productId) {
+      const product = (state.checkerProducts || []).find((p) => p.id === productId);
+      if (!product) return;
+
+      document.getElementById('checker-product-id').value = product.id;
+      document.getElementById('checker-product-name').value = product.name || '';
+      document.getElementById('checker-product-dbh-category').value = product.dbh_category || '';
+      document.getElementById('checker-product-cost-price').value = product.cost_price ?? 0;
+      document.getElementById('checker-product-selling-price').value = product.selling_price ?? 0;
+      document.getElementById('checker-product-active').checked = !!product.is_active;
+
+      const modal = document.getElementById('checker-product-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeCheckerProductModal() {
+      const modal = document.getElementById('checker-product-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    async function submitCheckerProductForm() {
+      const productId = document.getElementById('checker-product-id').value;
+      const product = {
+        name: document.getElementById('checker-product-name').value.trim(),
+        dbh_category: document.getElementById('checker-product-dbh-category').value.trim(),
+        cost_price: parseFloat(document.getElementById('checker-product-cost-price').value) || 0,
+        selling_price: parseFloat(document.getElementById('checker-product-selling-price').value) || 0,
+        is_active: document.getElementById('checker-product-active').checked,
+      };
+
+      try {
+        const res = await _adminFetch('admin-manage-checkers', { action: 'update-product', productId, product });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.message || 'Failed to save');
+        showToast('Checker pricing updated', 'success');
+        closeCheckerProductModal();
+        loadCheckerProducts();
+      } catch (error) {
+        console.error('Error saving checker product:', error);
+        showToast(error.message || 'Failed to save checker pricing', 'error');
+      }
+    }
+
+    async function loadCheckerOrders() {
+      try {
+        const status = document.getElementById('checker-orders-status-filter')?.value || undefined;
+        const res = await _adminFetch('admin-manage-checkers', { action: 'list-orders', status, limit: 100 });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.message || 'Failed to load checker orders');
+        state.checkerOrders = result.orders || [];
+        renderCheckerOrders(state.checkerOrders);
+      } catch (error) {
+        console.error('Error loading checker orders:', error);
+        showToast('Failed to load checker orders', 'error');
+      }
+    }
+
+    function renderCheckerOrders(orders) {
+      const tbody = document.getElementById('checker-orders-tbody');
+      const emptyState = document.getElementById('checker-orders-empty-state');
+      if (!tbody || !emptyState) return;
+
+      if (!orders || orders.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+      emptyState.classList.add('hidden');
+
+      const statusClass = {
+        completed: 'bg-green-100 text-green-800',
+        pending: 'bg-yellow-100 text-yellow-800',
+        manual_review: 'bg-blue-100 text-blue-800',
+        failed: 'bg-red-100 text-red-800',
+        refunded: 'bg-slate-200 text-slate-700',
+      };
+
+      tbody.innerHTML = orders.map((o) => `
+        <tr>
+          <td class="px-4 py-3 font-mono text-xs">${esc(o.order_reference)}</td>
+          <td class="px-4 py-3">${esc(o.checker_products?.name || '—')}</td>
+          <td class="px-4 py-3">${formatCurrency(o.amount)}</td>
+          <td class="px-4 py-3 font-mono text-xs">${o.serial_number ? esc(o.serial_number) : '—'}</td>
+          <td class="px-4 py-3 font-mono text-xs">${o.pin ? esc(o.pin) : '—'}</td>
+          <td class="px-4 py-3">
+            <span class="px-2 py-1 rounded-full text-xs font-medium ${statusClass[o.status] || 'bg-slate-100 text-slate-700'}">${esc(o.status)}</span>
+          </td>
+          <td class="px-4 py-3 text-xs text-slate-500">${formatDate(o.created_at)}</td>
+          <td class="px-4 py-3">
+            ${o.status === 'manual_review'
+              ? `<button class="resolve-checker-order-btn text-xs font-medium text-brand-600 hover:text-brand-700" data-order-reference="${esc(o.order_reference)}">Resolve</button>`
+              : o.status === 'completed'
+                ? `<button class="refund-checker-order-btn text-xs font-medium text-red-600 hover:text-red-700" data-order-reference="${esc(o.order_reference)}">Refund</button>`
+                : '—'}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function refundCompletedCheckerOrder(orderReference) {
+      if (!confirm(`This order is already completed and the customer has the serial/PIN.\n\nRefund GH₵ back to their wallet anyway? Use this only for disputes or mistaken purchases.`)) {
+        return;
+      }
+      try {
+        const res = await _adminFetch('admin-manage-checkers', {
+          action: 'resolve-manual-review',
+          orderReference,
+          resolution: 'refund',
+        });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.message || 'Failed to refund order');
+        showToast('Customer refunded', 'success');
+        loadCheckerOrders();
+      } catch (error) {
+        console.error('Error refunding checker order:', error);
+        showToast(error.message || 'Failed to refund order', 'error');
+      }
+    }
+
+    function openCheckerResolveModal(orderReference) {
+      state.currentResolveReference = orderReference;
+      state.checkerResolveMode = 'complete';
+      document.getElementById('checker-resolve-reference').textContent = orderReference;
+      document.getElementById('checker-resolve-serial').value = '';
+      document.getElementById('checker-resolve-pin').value = '';
+      document.getElementById('checker-resolve-exam-date').value = '';
+      document.getElementById('checker-resolve-results-link').value = '';
+      document.getElementById('checker-resolve-complete-fields').classList.remove('hidden');
+      document.getElementById('checker-resolve-refund-notice').classList.add('hidden');
+      document.querySelectorAll('.checker-resolve-mode-tab').forEach((t, i) => {
+        t.classList.toggle('active', i === 0);
+        t.classList.toggle('bg-white', i === 0);
+        t.classList.toggle('text-slate-800', i === 0);
+        t.classList.toggle('shadow', i === 0);
+        t.classList.toggle('text-slate-600', i !== 0);
+      });
+
+      const modal = document.getElementById('checker-resolve-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeCheckerResolveModal() {
+      const modal = document.getElementById('checker-resolve-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    async function submitCheckerResolve() {
+      const orderReference = state.currentResolveReference;
+      const resolution = state.checkerResolveMode || 'complete';
+      if (!orderReference) return;
+
+      const payload = { action: 'resolve-manual-review', orderReference, resolution };
+
+      if (resolution === 'complete') {
+        payload.serial_number = document.getElementById('checker-resolve-serial').value.trim();
+        payload.pin = document.getElementById('checker-resolve-pin').value.trim();
+        payload.exam_date = document.getElementById('checker-resolve-exam-date').value.trim();
+        payload.results_link = document.getElementById('checker-resolve-results-link').value.trim();
+        if (!payload.serial_number || !payload.pin) {
+          showToast('Serial number and PIN are required', 'warning');
+          return;
+        }
+      } else if (!confirm(`Refund this order's full amount to the customer's wallet?`)) {
+        return;
+      }
+
+      try {
+        const res = await _adminFetch('admin-manage-checkers', payload);
+        const result = await res.json();
+        if (!result.success) throw new Error(result.message || 'Failed to resolve order');
+        showToast(resolution === 'complete' ? 'Order marked completed' : 'Customer refunded', 'success');
+        closeCheckerResolveModal();
+        loadCheckerOrders();
+      } catch (error) {
+        console.error('Error resolving checker order:', error);
+        showToast(error.message || 'Failed to resolve order', 'error');
+      }
+    }
+
     // Bundle CRUD Functions
     function openBundleModal(bundleId = null) {
       const modal = document.getElementById('bundle-modal');
@@ -1914,8 +2181,15 @@ const statusColor =
 
         document.getElementById('modal-order-amount').textContent =
           formatCurrency(orderData.amount);
+        // Match the table's Manual Review heuristic here too — otherwise this
+        // modal would show "Processing" for the same order the table lists
+        // as "Manual Review", which is confusing when picking a new status.
+        const modalIsManualReview =
+          orderData.status === 'manual_review' ||
+          (orderData.status === 'processing' && orderData.manual_fallback === true);
+        const modalDisplayStatus = modalIsManualReview ? 'manual_review' : orderData.status;
         document.getElementById('modal-order-status').textContent =
-          orderData.status.charAt(0).toUpperCase() + orderData.status.slice(1);
+          modalDisplayStatus.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         document.getElementById('modal-order-network').textContent =
           orderData.network?.toUpperCase() || 'Unknown';
         document.getElementById('modal-order-size').textContent =
@@ -1943,12 +2217,25 @@ const statusColor =
             { value: 'failed',     label: 'Failed' },
           ];
 
+          // Legacy manual-review rows store status='processing' + manual_fallback=true
+          // instead of the newer status='manual_review'. That combination isn't really
+          // "already Processing" from an admin's point of view — the table/modal still
+          // label it "Manual Review" — so it must not suppress 'processing' from the
+          // list the way picking an actual duplicate status would.
+          const isManualReview =
+            currentStatus === 'manual_review' ||
+            (currentStatus === 'processing' && orderData.manual_fallback === true);
+
           // For completed orders: only 'failed' is a valid transition (mirrors server rule).
-          // For all other statuses: all options are available except the current one.
+          // For manual-review orders (real or legacy-flagged): no status is "current" yet
+          // from the admin's perspective, so nothing is excluded.
+          // For everything else: all options are available except the current one.
           const isCompleted = currentStatus === 'completed';
           const allowed = isCompleted
             ? ALL_STATUSES.filter(s => s.value === 'failed')
-            : ALL_STATUSES.filter(s => s.value !== currentStatus);
+            : isManualReview
+              ? ALL_STATUSES
+              : ALL_STATUSES.filter(s => s.value !== currentStatus);
 
           select.innerHTML = allowed
             .map(s => `<option value="${s.value}">${s.label}</option>`)
@@ -2202,15 +2489,99 @@ document.querySelectorAll('.admin-nav-btn').forEach(btn => {
 
       if (orderSearch)
         orderSearch.addEventListener('input', () => {
-          state.ordersPage = 1;
-          applyOrderFilters();
+          debouncedRefreshAllOrders();
         });
 
       if (orderFilter)
         orderFilter.addEventListener('change', () => {
           state.ordersPage = 1;
-          applyOrderFilters();
+          refreshAllOrders();
         });
+
+      // ── Bulk order selection / bulk-complete ──────────────────────────────
+      function updateOrdersBulkToolbar() {
+        const toolbar = document.getElementById('orders-bulk-toolbar');
+        const countEl = document.getElementById('orders-selected-count');
+        const count   = state.selectedOrderIds.size;
+        if (countEl) countEl.textContent = count;
+        if (toolbar) {
+          toolbar.classList.toggle('hidden', count === 0);
+          toolbar.classList.toggle('flex', count > 0);
+        }
+        const selectAllBox = document.getElementById('orders-select-all');
+        if (selectAllBox) {
+          const pageIds = state.filteredOrders
+            .slice((state.ordersPage - 1) * state.pageSize, state.ordersPage * state.pageSize)
+            .map(o => o.id);
+          selectAllBox.checked = pageIds.length > 0 && pageIds.every(id => state.selectedOrderIds.has(id));
+        }
+      }
+
+      document.getElementById('all-orders-body')?.addEventListener('change', (e) => {
+        const box = e.target.closest('.order-select-checkbox');
+        if (!box) return;
+        const id = box.dataset.orderId;
+        if (box.checked) state.selectedOrderIds.add(id);
+        else state.selectedOrderIds.delete(id);
+        updateOrdersBulkToolbar();
+      });
+
+      document.getElementById('orders-select-all')?.addEventListener('change', (e) => {
+        const pageIds = state.filteredOrders
+          .slice((state.ordersPage - 1) * state.pageSize, state.ordersPage * state.pageSize)
+          .map(o => o.id);
+        if (e.target.checked) pageIds.forEach(id => state.selectedOrderIds.add(id));
+        else pageIds.forEach(id => state.selectedOrderIds.delete(id));
+        renderOrders();
+        updateOrdersBulkToolbar();
+      });
+
+      document.getElementById('orders-bulk-clear')?.addEventListener('click', () => {
+        state.selectedOrderIds.clear();
+        renderOrders();
+        updateOrdersBulkToolbar();
+      });
+
+      document.getElementById('orders-bulk-complete')?.addEventListener('click', async () => {
+        const ids = [...state.selectedOrderIds];
+        if (ids.length === 0) return;
+
+        const selectedOrders  = state.allOrders.filter(o => ids.includes(o.id));
+        const alreadyDone     = selectedOrders.filter(o => o.status === 'completed').length;
+        const eligibleProfit  = selectedOrders
+          .filter(o => o.status !== 'completed')
+          .reduce((sum, o) => sum + (parseFloat(o.external_response?.profit) || 0), 0);
+
+        const confirmMsg = `Mark ${ids.length} order(s) as Completed?` +
+          (eligibleProfit > 0 ? `\n\nThis will credit approximately GH₵${eligibleProfit.toFixed(2)} in store owner profit.` : '') +
+          (alreadyDone > 0 ? `\n(${alreadyDone} already completed and will be skipped.)` : '');
+
+        if (!confirm(confirmMsg)) return;
+
+        try {
+          const res = await _adminFetch('admin-manage-orders', {
+            action: 'bulk-update-status',
+            orderIds: ids,
+            status: 'completed',
+          });
+          const result = await res.json();
+          if (!result.success) throw new Error(result.message || 'Bulk update failed');
+
+          showToast(
+            `${result.updated} order(s) marked completed` +
+            (result.totalProfitCredited ? ` — GH₵${result.totalProfitCredited.toFixed(2)} profit credited` : ''),
+            'success'
+          );
+
+          state.selectedOrderIds.clear();
+          loadAllOrders();
+          loadDashboardData();
+          loadOrderStats();
+        } catch (error) {
+          console.error('Error bulk-updating orders:', error);
+          showToast(error.message || 'Failed to bulk update orders', 'error');
+        }
+      });
 
      if (userSearch)
         userSearch.addEventListener('input', () => {
@@ -2247,6 +2618,11 @@ document.querySelectorAll('.admin-nav-btn').forEach(btn => {
           handleBundleFormSubmit();
           return;
         }
+        if (e.target.id === 'checker-product-form') {
+          e.preventDefault();
+          submitCheckerProductForm();
+          return;
+        }
       });
 
       // Global click delegation
@@ -2279,6 +2655,58 @@ document.querySelectorAll('.admin-nav-btn').forEach(btn => {
             state.ordersPage--;
             renderOrders();
           }
+          return;
+        }
+
+        // ── Checker admin: product pricing ──────────────────────────────
+        if (target.id === 'refresh-checker-products-btn') {
+          loadCheckerProducts();
+          return;
+        }
+        if (target.closest('.edit-checker-product-btn')) {
+          const btn = target.closest('.edit-checker-product-btn');
+          openCheckerProductModal(btn.dataset.productId);
+          return;
+        }
+        if (target.id === 'close-checker-product-modal' || target.id === 'checker-product-modal-backdrop' || target.id === 'cancel-checker-product-edit') {
+          closeCheckerProductModal();
+          return;
+        }
+
+        // ── Checker admin: orders ────────────────────────────────────────
+        if (target.id === 'refresh-checker-orders-btn') {
+          loadCheckerOrders();
+          return;
+        }
+        if (target.closest('.resolve-checker-order-btn')) {
+          const btn = target.closest('.resolve-checker-order-btn');
+          openCheckerResolveModal(btn.dataset.orderReference);
+          return;
+        }
+        if (target.closest('.refund-checker-order-btn')) {
+          const btn = target.closest('.refund-checker-order-btn');
+          refundCompletedCheckerOrder(btn.dataset.orderReference);
+          return;
+        }
+        if (target.id === 'close-checker-resolve-modal' || target.id === 'checker-resolve-modal-backdrop') {
+          closeCheckerResolveModal();
+          return;
+        }
+        if (target.closest('.checker-resolve-mode-tab')) {
+          const tab = target.closest('.checker-resolve-mode-tab');
+          document.querySelectorAll('.checker-resolve-mode-tab').forEach((t) => {
+            t.classList.remove('active', 'bg-white', 'text-slate-800', 'shadow');
+            t.classList.add('text-slate-600');
+          });
+          tab.classList.add('active', 'bg-white', 'text-slate-800', 'shadow');
+          tab.classList.remove('text-slate-600');
+          state.checkerResolveMode = tab.dataset.resolveMode;
+          document.getElementById('checker-resolve-complete-fields').classList.toggle('hidden', state.checkerResolveMode !== 'complete');
+          document.getElementById('checker-resolve-refund-notice').classList.toggle('hidden', state.checkerResolveMode !== 'refund');
+          return;
+        }
+        if (target.id === 'submit-checker-resolve-btn') {
+          submitCheckerResolve();
           return;
         }
 
@@ -3822,9 +4250,11 @@ let currentWithdrawalFilter = 'pending';
           const phone  = esc(o.phone || o.recipient || '');
           const date   = formatDate(o.created_at);
 
-         const isManualReview =
-  o.status === 'processing' &&
-  o.manual_fallback === true;
+         // Use the actual DB status first. Legacy rows (created before this fix)
+          // may still have status='processing' + manual_fallback=true; support both.
+          const isManualReview =
+            o.status === 'manual_review' ||
+            (o.status === 'processing' && o.manual_fallback === true);
 
 const statusClass = isManualReview
   ? 'status-manual_review'
@@ -4003,7 +4433,13 @@ const statusLabel = isManualReview
         document.getElementById('api-modal-order-name').textContent  = d.orderDescription || `${net} Data Bundle`;
         document.getElementById('api-modal-order-ref').textContent   = d.orderRef || orderId;
         document.getElementById('api-modal-order-amount').textContent = `GH₵${amount}`;
-        document.getElementById('api-modal-order-status').textContent = status.charAt(0).toUpperCase() + status.slice(1);
+        // Show Manual Review label if that's the real status (DB) or legacy heuristic
+        const isManualReview =
+          status === 'manual_review' ||
+          (status === 'processing' && d.orderManualFallback === 'true');
+        const displayStatus = isManualReview ? 'manual_review' : status;
+        document.getElementById('api-modal-order-status').textContent =
+          displayStatus.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         document.getElementById('api-modal-order-network').textContent = net || '—';
         document.getElementById('api-modal-order-size').textContent   = size;
         document.getElementById('api-modal-reseller-name').textContent = d.resellerName || '—';
@@ -4013,12 +4449,13 @@ const statusLabel = isManualReview
 
         // Populate status select (exclude current status)
         const ALL_STATUSES = [
-          { value: 'pending',    label: 'Pending' },
-          { value: 'processing', label: 'Processing' },
-          { value: 'completed',  label: 'Completed' },
-          { value: 'failed',     label: 'Failed' },
+          { value: 'pending',        label: 'Pending' },
+          { value: 'processing',     label: 'Processing' },
+          { value: 'manual_review',  label: 'Manual Review' },
+          { value: 'completed',      label: 'Completed' },
+          { value: 'failed',         label: 'Failed' },
         ];
-        const currentStatus = status;
+        const currentStatus = displayStatus;
         const isCompleted = currentStatus === 'completed';
         const allowed = isCompleted
           ? ALL_STATUSES.filter(s => s.value === 'failed')
@@ -5762,6 +6199,7 @@ rejectWithdrawal: async function(id) {
     // Filter change listeners — restart auto-refresh on any filter change
     document.getElementById('analytics-network-filter')?.addEventListener('change', () => { loadAnalytics(); startAnalyticsAutoRefresh(); });
     document.getElementById('analytics-period-filter')?.addEventListener('change',  () => { loadAnalytics(); startAnalyticsAutoRefresh(); });
+    document.getElementById('checker-orders-status-filter')?.addEventListener('change', () => { loadCheckerOrders(); });
     document.getElementById('analytics-refresh-btn')?.addEventListener('click',     () => { loadAnalytics(); startAnalyticsAutoRefresh(); });
 
     // ── End Sales Analytics ──────────────────────────────────────────────────
@@ -5976,6 +6414,142 @@ document.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // END SECURITY LOGS MODULE
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SYSTEM ALERTS MODULE
+// Surfaces admin_alerts (raised by sync-bundle-costs / reconcile-stale-orders
+// background jobs) through the existing header notification bell.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SEVERITY_STYLES = {
+  CRITICAL: { dot: 'bg-red-600',    text: 'text-red-700' },
+  HIGH:     { dot: 'bg-red-500',    text: 'text-red-600' },
+  MEDIUM:   { dot: 'bg-amber-500',  text: 'text-amber-600' },
+  LOW:      { dot: 'bg-slate-400',  text: 'text-slate-500' },
+};
+
+function timeAgo(isoString) {
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+async function loadAlerts() {
+  try {
+    const res = await _adminFetch('admin-manage-orders', { action: 'get-alerts' });
+    const result = await res.json();
+    if (!result.success) return;
+    renderAlerts(result.alerts || []);
+  } catch (err) {
+    console.error('Error loading alerts:', err);
+  }
+}
+
+function renderAlerts(alerts) {
+  const countEls = [document.getElementById('notification-count'), document.getElementById('notification-count-mobile')].filter(Boolean);
+  const listEls  = [document.getElementById('alerts-list'), document.getElementById('alerts-list-mobile')].filter(Boolean);
+  const emptyEls = [document.getElementById('alerts-empty-label'), document.getElementById('alerts-empty-label-mobile')].filter(Boolean);
+  if (listEls.length === 0) return;
+
+  countEls.forEach((countEl) => {
+    if (alerts.length > 0) {
+      countEl.textContent = alerts.length > 9 ? '9+' : String(alerts.length);
+      countEl.classList.remove('hidden');
+    } else {
+      countEl.classList.add('hidden');
+    }
+  });
+  emptyEls.forEach((emptyEl) => emptyEl.classList.toggle('hidden', alerts.length > 0));
+
+  const html = alerts.length === 0
+    ? `<div class="p-6 text-center text-sm text-slate-400">No active alerts — all clear.</div>`
+    : alerts.map(a => {
+        const style = SEVERITY_STYLES[a.severity] || SEVERITY_STYLES.LOW;
+        return `
+      <div class="p-4 hover:bg-slate-50">
+        <div class="flex items-start gap-2">
+          <span class="w-2 h-2 mt-1.5 rounded-full ${style.dot} flex-shrink-0"></span>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-semibold ${style.text} uppercase tracking-wide">${a.severity} · ${a.type.replace('_', ' ')}</p>
+            <p class="text-sm text-slate-700 mt-0.5">${a.message}</p>
+            <div class="flex items-center justify-between mt-2">
+              <span class="text-xs text-slate-400">${timeAgo(a.created_at)}</span>
+              <button class="resolve-alert-btn text-xs font-medium text-brand-600 hover:text-brand-700" data-alert-id="${a.id}">
+                Mark resolved
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+      }).join('');
+
+  listEls.forEach((listEl) => { listEl.innerHTML = html; });
+}
+
+async function resolveAlert(alertId) {
+  try {
+    const res = await _adminFetch('admin-manage-orders', { action: 'resolve-alert', alertId });
+    const result = await res.json();
+    if (result.success) {
+      showToast('Alert resolved', 'success');
+      loadAlerts();
+    } else {
+      showToast(result.message || 'Failed to resolve alert', 'error');
+    }
+  } catch (err) {
+    console.error('Error resolving alert:', err);
+    showToast('Failed to resolve alert', 'error');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const bellBtn  = document.getElementById('notification-btn');
+  const dropdown = document.getElementById('alerts-dropdown');
+
+  if (bellBtn && dropdown) {
+    bellBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.classList.toggle('hidden');
+      if (!dropdown.classList.contains('hidden')) loadAlerts();
+    });
+    document.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target) && !bellBtn.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+  }
+
+  const bellBtnMobile  = document.getElementById('notification-btn-mobile');
+  const dropdownMobile = document.getElementById('alerts-dropdown-mobile');
+
+  if (bellBtnMobile && dropdownMobile) {
+    bellBtnMobile.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdownMobile.classList.toggle('hidden');
+      if (!dropdownMobile.classList.contains('hidden')) loadAlerts();
+    });
+    document.addEventListener('click', (e) => {
+      if (!dropdownMobile.contains(e.target) && !bellBtnMobile.contains(e.target)) {
+        dropdownMobile.classList.add('hidden');
+      }
+    });
+  }
+
+  // Resolve button (delegated — list is re-rendered on every loadAlerts())
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.resolve-alert-btn');
+    if (btn) resolveAlert(btn.dataset.alertId);
+  });
+
+  // Initial load + light polling so the badge count stays current even if
+  // the admin never opens the dropdown.
+  loadAlerts();
+  setInterval(loadAlerts, 60000);
+});
 
 // =============================================================================
 // GLOBAL FUNCTION EXPORTS

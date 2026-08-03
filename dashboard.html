@@ -105,6 +105,10 @@
                         <i class="fas fa-history w-5 text-center"></i>
                         <span>History</span>
                     </button>
+                    <button data-page="checkers" class="nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-graduation-cap w-5 text-center"></i>
+                        <span>Results Checkers</span>
+                    </button>
                     <button data-page="store" class="nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
                         <i class="fas fa-store w-5 text-center"></i>
                         <span>Store</span>
@@ -628,6 +632,105 @@
                             </div>
                         </div>
 
+                    </div>
+                </div>
+
+                <!-- Results Checkers Page -->
+                <div id="checkersPage" class="page space-y-6">
+                    <div class="card p-6">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                            <div>
+                                <h2 class="text-2xl font-bold text-gray-800">Results Checkers</h2>
+                                <p class="text-gray-500">BECE, WASSCE &amp; SHS Placement checkers</p>
+                            </div>
+                            <div class="bg-brand-50 px-4 py-3 rounded-lg border border-brand-100">
+                                <p class="text-xs text-gray-500 font-medium">Balance</p>
+                                <p class="text-xl font-bold text-brand-700" id="checkersPageBalance">GH₵ 0.00</p>
+                            </div>
+                        </div>
+
+                        <!-- Checker Type Selection -->
+                        <div class="mb-8">
+                            <h3 class="text-lg font-bold text-gray-700 mb-4">Select Checker Type</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="checkerTypeSelection">
+                                <div class="text-center py-8 col-span-full">
+                                    <i class="fas fa-spinner fa-spin text-2xl text-gray-400"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Purchase Form (shown once a checker type is selected) -->
+                        <div id="checkerPurchaseForm" class="hidden border-t border-gray-100 pt-6">
+                            <h3 class="text-lg font-bold text-gray-700 mb-1" id="checkerFormTitle">Buy Checker</h3>
+                            <p class="text-sm text-gray-500 mb-4" id="checkerFormPrice"></p>
+                            <div class="max-w-sm space-y-3">
+                                <button id="checkerBuyBtn"
+                                    class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
+                                    <i class="fas fa-shopping-cart"></i>
+                                    <span id="checkerBuyBtnText">Buy Checker</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- My Purchased Checkers -->
+                    <div class="card">
+                        <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+                            <h2 class="text-base font-bold text-gray-800">My Purchased Checkers</h2>
+                            <button id="checkerHistoryRefreshBtn" class="text-xs text-brand-600 hover:text-brand-700 font-medium">
+                                <i class="fas fa-rotate-right mr-1"></i>Refresh
+                            </button>
+                        </div>
+                        <div id="checkerOrdersContainer" class="p-4">
+                            <div class="text-center py-8 text-gray-400 text-sm">Loading order history…</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Checker Credentials Reveal Modal -->
+                <div id="checkerResultModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4 hidden">
+                    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+                    <div class="bg-white rounded-2xl w-full max-w-md relative z-10 shadow-2xl">
+                        <div class="p-6">
+                            <div class="text-center mb-5">
+                                <div class="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <i class="fas fa-graduation-cap text-2xl text-green-600"></i>
+                                </div>
+                                <h3 class="text-lg font-bold text-gray-800" id="checkerResultTitle">Checker Purchased</h3>
+                                <p class="text-sm text-gray-500 mt-1">Save these details — you'll need them to check your results</p>
+                            </div>
+
+                            <div class="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-4 mb-4 space-y-3">
+                                <div>
+                                    <p class="text-xs text-gray-500 font-medium mb-0.5">Serial Number</p>
+                                    <p id="checkerResultSerial" class="text-sm font-mono text-gray-800 break-all select-all"></p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500 font-medium mb-0.5">PIN</p>
+                                    <p id="checkerResultPin" class="text-sm font-mono text-gray-800 break-all select-all"></p>
+                                </div>
+                                <div id="checkerResultExamDateRow" class="hidden">
+                                    <p class="text-xs text-gray-500 font-medium mb-0.5">Exam Date</p>
+                                    <p id="checkerResultExamDate" class="text-sm text-gray-800"></p>
+                                </div>
+                            </div>
+
+                            <a id="checkerResultCheckLink" href="#" target="_blank" rel="noopener"
+                                class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-xl transition-colors mb-3 flex items-center justify-center gap-2">
+                                <i class="fas fa-arrow-up-right-from-square"></i>
+                                <span>Check My Results</span>
+                            </a>
+
+                            <button id="checkerResultCopyBtn"
+                                class="w-full border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-2.5 rounded-xl transition-colors text-sm mb-3">
+                                <i class="fas fa-copy mr-1"></i>Copy Serial &amp; PIN
+                            </button>
+
+                            <button id="checkerResultCloseBtn"
+                                class="w-full border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-2.5 rounded-xl transition-colors text-sm">
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -1456,6 +1559,10 @@
                         <i class="fas fa-history w-5 text-center"></i>
                         <span>History</span>
                     </button>
+                    <button data-page="checkers" class="mobile-nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <i class="fas fa-graduation-cap w-5 text-center"></i>
+                        <span>Results Checkers</span>
+                    </button>
                     <button data-page="store" class="mobile-nav-item w-full text-left flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-800 transition-colors">
                         <i class="fas fa-store w-5 text-center"></i>
                         <span>Store</span>
@@ -1589,6 +1696,7 @@
     <!-- is a live Promise by the time the module's DOMContentLoaded handler awaits it.   -->
     <script type="module" src="site-lock-check.js"></script>
     <script type="module" src="dashboard-main.js?v=3"></script>
+    <script type="module" src="checkers-main.js?v=1"></script>
 
 
 <!-- Withdrawal Modal -->

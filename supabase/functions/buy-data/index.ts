@@ -1,3 +1,4 @@
+//buy-data-edge functions 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -7,7 +8,7 @@ const corsHeaders = {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Provider = 'justicedata' | 'pensite' | 'hubnet' | 'sparkdata' | 'databosshub';
+type Provider = 'justicedata' | 'pensite' | 'hubnet' | 'sparkdata' | 'databosshub' | 'up2u';
 
 interface ProviderResult {
   success: boolean;
@@ -77,6 +78,15 @@ function mapNetworkDataBossHub(network: string): string {
   if (network === 'telecel')    return 'Telecel';
   if (network === 'airteltigo') return 'Airteltigo';
   return network;
+}
+
+// Up2u uses the same lowercase network keys we already use internally —
+// identity mapping, kept as a function for consistency + future-proofing.
+function mapNetworkUp2u(network: string): string {
+  if (network === 'mtn')        return 'mtn';
+  if (network === 'telecel')    return 'telecel';
+  if (network === 'airteltigo') return 'airteltigo';
+  return network.toLowerCase();
 }
 
 // ─── Provider: Justice Data Shop ─────────────────────────────────────────────
@@ -261,6 +271,73 @@ async function placeDataBossHubOrder(payload: OrderPayload): Promise<ProviderRes
   }
 }
 
+// ─── Provider: Up2u ───────────────────────────────────────────────────────────
+async function placeUp2uOrder(payload: OrderPayload): Promise<ProviderResult> {
+  const apiKey = Deno.env.get("UP2U_API_KEY");
+  if (!apiKey) return { success: false, error: "Up2u API key not configured" };
+
+  const networkKey  = mapNetworkUp2u(payload.network);
+  // Up2u expects package size in MB — internal bundleSize is in GB.
+  const packageSizeMB = payload.bundleSize * 1000;
+
+  try {
+    console.log(`[Up2u] Placing order ${payload.orderId} — ${payload.network} ${payload.bundleSize}GB -> ${payload.phone}`);
+    const response = await fetch("https://fmulclzwaohrzznsgalg.supabase.co/functions/v1/public-api", {
+      method: 'POST',
+      headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action:       'place_order',
+        network:      networkKey,
+        recipient:    payload.phone,
+        package_size: packageSizeMB,
+        order_id:     payload.orderId,
+      })
+    });
+
+    if (!response.ok) {
+      let errorText = await response.text();
+      let parsedErr: any = {};
+      try { parsedErr = JSON.parse(errorText); } catch { /* not JSON, keep raw text */ }
+
+      // Map Up2u's documented error codes to consistent internal error strings.
+      switch (response.status) {
+        case 401:
+          return { success: false, error: "Up2u error: unauthorized (invalid or missing API key)" };
+        case 400:
+          return { success: false, error: `Up2u error: bad_request — ${parsedErr.message || errorText}` };
+        case 402:
+          return { success: false, error: "Up2u error: insufficient_balance (provider wallet too low)" };
+        case 404:
+          return { success: false, error: "Up2u error: not_found (bundle or order not found)" };
+        case 429:
+          return { success: false, error: "Up2u error: rate_limited — back off and retry" };
+        default:
+          return { success: false, error: `Up2u HTTP ${response.status}: ${errorText}` };
+      }
+    }
+
+    const data = await response.json();
+    // Success envelope: { status_code: 200, response: { status, message, order_reference, ... } }
+    if (data.status_code !== 200 || !data.response) {
+      return { success: false, error: `Up2u error: ${data.response?.message || data.message || 'Unknown error'}` };
+    }
+
+    console.log(`[Up2u] Success:`, JSON.stringify(data));
+    return {
+      success: true,
+      data: {
+        ...data.response,
+        message:            data.response.message || 'Order received and queued for processing.',
+        _provider:          'up2u',
+        _network_key:       networkKey,
+        _up2u_reference:    data.response.order_reference, // their ref — useful for GET /order/:order_id reconciliation
+      },
+    };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Up2u unknown error' };
+  }
+}
+
 // ─── Active Provider Dispatcher ───────────────────────────────────────────────
 async function placeOrder(
   supabase: any,
@@ -290,6 +367,9 @@ async function placeOrder(
       break;
     case 'databosshub':
       result = await placeDataBossHubOrder(payload);
+      break;
+    case 'up2u':
+      result = await placeUp2uOrder(payload);
       break;
     case 'justicedata':
     default:

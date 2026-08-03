@@ -41,6 +41,7 @@ const ALLOWED_TARGETS = new Set([
   'send-sms',
   'admin-manage-api-keys',  // ← API key management for operator oversight
   'admin-security-logs',    // ← Security logs viewer
+  'admin-manage-checkers',  // ← Results Checker feature (pricing/catalog + order monitoring)
 ]);
 
 const IS_PRODUCTION = Deno.env.get('ENVIRONMENT') === 'production';
@@ -237,16 +238,25 @@ serve(async (req: Request) => {
   // ── 4. Forward to target function with injected bearer token ───────────────
   let targetRes: Response;
   try {
-    // Forward with service role key — never expires, always valid.
+    // Forward with service role key via apikey — never expires, always valid.
     // Admin identity/role already verified above by validateAdminSession().
-    // Target functions receive service role token + admin context headers.
+    // Target functions receive service role access + admin context headers.
+    //
+    // IMPORTANT: do NOT send SERVICE_ROLE_KEY as `Authorization: Bearer ...`.
+    // Since the project migrated to the new sb_publishable_/sb_secret_ key
+    // format, SERVICE_ROLE_KEY is no longer a JWT — sending an sb_ key in
+    // Authorization while also sending one in apikey triggers Supabase's
+    // platform-level UNAUTHORIZED_API_KEY_CONFLICTS rejection ("Conflicting
+    // API keys") before the target function ever runs. Per Supabase's own
+    // migration guidance: send the intended sb_ key in the apikey header
+    // only, and the target function must have verify_jwt = false (see
+    // supabase/config.toml) since no Authorization JWT is sent.
     const cookieSessionId = parseCookie(req.headers.get('Cookie'), SESSION_COOKIE) || sessionIdHeader;
     targetRes = await fetch(`${FUNCTIONS_BASE}/${targetFn}`, {
       method: 'POST',
       headers: {
         'Content-Type':        'application/json',
-        'Authorization':       `Bearer ${SERVICE_ROLE_KEY}`,
-        'apikey':              SUPABASE_ANON_KEY,
+        'apikey':              SERVICE_ROLE_KEY,
         'x-admin-user-id':     sessionData.user_id,
         'x-admin-role':        sessionData.role,
         'x-session-id':        cookieSessionId ?? '',

@@ -29,6 +29,9 @@ const ALLOWED_TARGETS = new Set([
   'verify-paystack',
   'set-transaction-pin',
   'api-generate-key',   // ← API key management for resellers
+  'get-checker-catalog',  // ← Results Checker feature
+  'buy-checker',
+  'checker-order-status',
 ]);
 
  const IS_PRODUCTION = Deno.env.get('ENVIRONMENT') === 'production';

@@ -155,9 +155,23 @@ serve(async (req) => {
         .range(offset, offset + pageSize - 1);
 
       if (likePattern) query = query.like("order_reference", likePattern);
-      if (statusFilter && ALLOWED_STATUSES.includes(statusFilter)) query = query.eq("status", statusFilter);
       if (networkFilter) query = query.eq("network", networkFilter.toLowerCase());
-      query = query.neq("status", "payment_pending");
+
+      // Statuses hidden from the default view because they're noise most of the
+      // time (payment_pending = still mid-checkout or genuinely abandoned once
+      // reconcile-pending-payments resolves it; failed = confirmed-abandoned,
+      // nothing owed). Both are terminal/resolved, not ambiguous — so unlike
+      // the old behavior, an explicit statusFilter now correctly overrides this
+      // instead of silently producing an impossible eq+neq query that always
+      // returned zero rows no matter what was requested.
+      const HIDDEN_BY_DEFAULT_STATUSES = ["payment_pending", "failed"];
+
+      if (statusFilter && ALLOWED_STATUSES.includes(statusFilter)) {
+        query = query.eq("status", statusFilter);
+      } else {
+        query = query.not("status", "in", `(${HIDDEN_BY_DEFAULT_STATUSES.join(",")})`);
+      }
+
       if (search) query = query.or(`order_reference.ilike.%${search}%,recipient.ilike.%${search}%`);
 
       const { data, error, count } = await query;
@@ -210,16 +224,35 @@ serve(async (req) => {
       }
 
       const { data: current } = await supabase
-        .from("adminorders").select("status, order_reference, payment_reference, external_response").eq("id", orderId).single();
+        .from("adminorders").select("status, order_reference, payment_reference, external_response, description").eq("id", orderId).single();
       if (!current) return json({ success: false, message: "Order not found" }, 404);
 
       if (current.status === "completed" && !["failed"].includes(newStatus)) {
         return json({ success: false, message: "Completed orders can only be moved to: failed" }, 400);
       }
 
+      // Pre-registered orders get a description ending in "— awaiting payment"
+      // that only guest-buy-data ever wrote, and only paystack-webhook's own
+      // success path ever cleaned up. Any other status transition (this one
+      // included) left it stuck forever, misleadingly implying an order is
+      // still unpaid even after it's been resolved to failed/failed_provider/
+      // completed. Strip it here so it's cleaned up regardless of which path
+      // resolved the order.
+      const cleanedDescription = (current.description || "").replace(/\s*—\s*awaiting payment\s*$/i, "");
+
       const { error } = await supabase
         .from("adminorders")
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+          description: cleanedDescription,
+          // Admin has now explicitly reviewed/acted on this order — clear the
+          // sticky manual_fallback flag so the UI stops re-labelling it
+          // "Manual Review" regardless of the status just set (see zprx.js
+          // isManualReview heuristic, which otherwise matches forever on
+          // status === 'processing' + manual_fallback === true).
+          external_response: { ...(current.external_response || {}), manual_fallback: false },
+        })
         .eq("id", orderId);
       if (error) throw error;
 
@@ -288,7 +321,149 @@ serve(async (req) => {
         }
       }
 
+      // ── Bidirectional API orders sync ─────────────────────────────────────
+      // If this is an API order (order_reference starts with "API-"), sync the
+      // status change back to api_orders so the API Orders tab stays consistent
+      // with All Orders. Without this, updating from All Orders → API Orders tab
+      // still shows the old status (one-way sync bug).
+      if (current.order_reference?.startsWith("API-")) {
+        await supabase
+          .from("api_orders")
+          .update({ status: newStatus, updated_at: new Date().toISOString() })
+          .eq("order_reference", current.order_reference)
+          .then(({ error: apiSyncErr }) => {
+            if (apiSyncErr) console.warn("[update-status] api_orders sync (non-fatal):", apiSyncErr.message);
+            else console.log(`[update-status] api_orders synced: ${current.order_reference} → ${newStatus}`);
+          });
+      }
+
       return json({ success: true, message: "Order status updated" });
+    }
+
+    // ── BULK UPDATE ORDER STATUS ─────────────────────────────────────────────
+    // Mirrors update-status's sync logic (transactions, guest_orders, api_orders,
+    // store totals) per order, but tolerates individual failures instead of
+    // aborting the whole batch — each order succeeds/fails/skips independently.
+    if (action === "bulk-update-status") {
+      const orderIds  = body.orderIds as string[];
+      const newStatus = body.status   as string;
+
+      if (!Array.isArray(orderIds) || orderIds.length === 0) {
+        return json({ success: false, message: "orderIds must be a non-empty array" }, 400);
+      }
+      if (orderIds.length > 200) {
+        return json({ success: false, message: "Too many orders in one batch (max 200)" }, 400);
+      }
+      if (!newStatus || !ALLOWED_STATUSES.includes(newStatus)) {
+        return json({ success: false, message: `Invalid status. Must be one of: ${ALLOWED_STATUSES.join(", ")}` }, 400);
+      }
+
+      let updatedCount = 0;
+      let skippedCount = 0;
+      let totalProfitCredited = 0;
+      const failures: { orderId: string; reason: string }[] = [];
+
+      for (const orderId of orderIds) {
+        try {
+          const { data: current } = await supabase
+            .from("adminorders")
+            .select("status, order_reference, payment_reference, external_response, amount, description")
+            .eq("id", orderId)
+            .single();
+
+          if (!current) { failures.push({ orderId, reason: "Order not found" }); continue; }
+          if (current.status === newStatus) { skippedCount++; continue; }
+          if (current.status === "completed" && newStatus !== "failed") {
+            failures.push({ orderId, reason: "Completed orders can only be moved to: failed" });
+            continue;
+          }
+
+          const { error: updErr } = await supabase
+            .from("adminorders")
+            .update({
+              status: newStatus,
+              updated_at: new Date().toISOString(),
+              // See update-status: strip the stale "— awaiting payment" suffix
+              // so it doesn't linger on orders resolved via bulk action either.
+              description: (current.description || "").replace(/\s*—\s*awaiting payment\s*$/i, ""),
+              // See update-status: clears the sticky manual_fallback flag so
+              // zprx.js's isManualReview heuristic stops re-labelling this
+              // order "Manual Review" after it's been explicitly reviewed.
+              external_response: { ...(current.external_response || {}), manual_fallback: false },
+            })
+            .eq("id", orderId);
+          if (updErr) { failures.push({ orderId, reason: updErr.message }); continue; }
+
+          if (newStatus === "completed" || newStatus === "failed") {
+            await supabase.from("transactions")
+              .update({ status: newStatus, updated_at: new Date().toISOString() })
+              .filter("details->>order_id", "eq", current.order_reference)
+              .then(({ error: e }) => { if (e) console.warn("[bulk-update-status] tx sync link1:", e.message); });
+
+            if (current.payment_reference) {
+              await supabase.from("transactions")
+                .update({ status: newStatus, updated_at: new Date().toISOString() })
+                .filter("details->>order_id", "eq", current.payment_reference)
+                .then(({ error: e }) => { if (e) console.warn("[bulk-update-status] tx sync link2:", e.message); });
+            }
+
+            const extPaymentRef = current.external_response?.payment_reference;
+            if (extPaymentRef && extPaymentRef !== current.payment_reference) {
+              await supabase.from("transactions")
+                .update({ status: newStatus, updated_at: new Date().toISOString() })
+                .filter("details->>order_id", "eq", extPaymentRef)
+                .then(({ error: e }) => { if (e) console.warn("[bulk-update-status] tx sync link3:", e.message); });
+            }
+          }
+
+          if (newStatus === "completed") {
+            const orderAmount  = Math.abs(parseFloat(current.amount) || 0);
+            const storeOwnerId = current.external_response?.storeownerid;
+
+            if (storeOwnerId) {
+              await supabase.rpc("increment_store_totals", { p_owner_id: storeOwnerId, p_amount: orderAmount })
+                .then(({ error: rpcErr }) => { if (rpcErr) console.warn("[bulk-update-status] increment_store_totals:", rpcErr.message); });
+              totalProfitCredited += orderAmount;
+            }
+
+            await supabase.from("guest_orders")
+              .update({ status: "completed", fulfilled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+              .eq("order_reference", current.order_reference)
+              .then(({ error: goErr }) => { if (goErr) console.warn("[bulk-update-status] guest_orders sync:", goErr.message); });
+          }
+
+          if (current.order_reference?.startsWith("API-")) {
+            await supabase.from("api_orders")
+              .update({ status: newStatus, updated_at: new Date().toISOString() })
+              .eq("order_reference", current.order_reference)
+              .then(({ error: apiSyncErr }) => { if (apiSyncErr) console.warn("[bulk-update-status] api_orders sync:", apiSyncErr.message); });
+          }
+
+          updatedCount++;
+        } catch (err) {
+          failures.push({ orderId, reason: err instanceof Error ? err.message : "Unknown error" });
+        }
+      }
+
+      await auditLog(supabase, user.id, "order_bulk_status_update", {
+        toStatus: newStatus,
+        requested: orderIds.length,
+        updated: updatedCount,
+        skipped: skippedCount,
+        failed: failures.length,
+      });
+
+      return json({
+        success: true,
+        updated: updatedCount,
+        skipped: skippedCount,
+        failed: failures.length,
+        failures,
+        totalProfitCredited,
+        message: `${updatedCount} order(s) updated` +
+          (skippedCount ? `, ${skippedCount} already ${newStatus}` : "") +
+          (failures.length ? `, ${failures.length} failed` : ""),
+      });
     }
 
     // ── CREATE MANUAL ORDER ────────────────────────────────────────────────
@@ -525,7 +700,7 @@ serve(async (req) => {
 
       // Enum-validated settings
       const ENUM_SETTINGS: Record<string, string[]> = {
-        active_provider: ["justicedata", "pensite", "hubnet", "sparkdata", "databosshub"],
+        active_provider: ["justicedata", "pensite", "hubnet", "sparkdata", "databosshub", "up2u"],
         deposit_method:  ["automatic", "manual"],
       };
 
@@ -721,6 +896,17 @@ serve(async (req) => {
   .in("status", ["manual_review", "failed_provider"])
   .order("created_at", { ascending: false });
 
+      // Backlog health check for reconcile-pending-payments: how many
+      // payment_pending orders are currently stale (older than 15min, the
+      // same threshold that job uses) and haven't been resolved yet. Should
+      // normally sit near zero — if this climbs, the job isn't keeping up
+      // with checkout volume and needs a bigger batch size / tighter schedule.
+      const { count: paymentBacklogCount } = await supabase
+        .from("adminorders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "payment_pending")
+        .lt("created_at", new Date(Date.now() - 15 * 60_000).toISOString());
+
       // ── Try snapshot table first ─────────────────────────────────────────
       const { data: snap } = await supabase
         .from("admin_dashboard_stats")
@@ -788,6 +974,7 @@ supabase
   total: snap.total_users || 0,
   activeToday: snap.active_users_today || 0
   },  manualPending: manualPendingRes.data || [],
+          paymentBacklog: paymentBacklogCount || 0,
         });
       }
 
@@ -891,6 +1078,7 @@ supabase
   activeToday: todayOrdersRes.count || 0
 },
         manualPending: manualPendingRes.data || [],
+        paymentBacklog: paymentBacklogCount || 0,
       });
     }
 
@@ -1421,6 +1609,40 @@ supabase
           })),
         },
       });
+    }
+
+    // ── GET ADMIN ALERTS ────────────────────────────────────────────────────
+    // Unresolved system alerts raised by background jobs (sync-bundle-costs,
+    // reconcile-stale-orders, and any future automated checks).
+    if (action === "get-alerts") {
+      const includeResolved = body.includeResolved === true;
+      let query = supabase
+        .from("admin_alerts")
+        .select("id, type, severity, message, details, resolved, resolved_at, created_at")
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (!includeResolved) query = query.eq("resolved", false);
+
+      const { data: alerts, error } = await query;
+      if (error) throw error;
+
+      return json({ success: true, alerts: alerts || [], count: (alerts || []).length });
+    }
+
+    // ── RESOLVE ADMIN ALERT ─────────────────────────────────────────────────
+    if (action === "resolve-alert") {
+      const alertId = body.alertId as string;
+      if (!alertId) return json({ success: false, message: "Alert ID required" }, 400);
+
+      const { error } = await supabase
+        .from("admin_alerts")
+        .update({ resolved: true, resolved_at: new Date().toISOString() })
+        .eq("id", alertId);
+      if (error) throw error;
+
+      await auditLog(supabase, user.id, "alert_resolved", { alertId });
+      return json({ success: true, message: "Alert marked as resolved" });
     }
 
     return json({ success: false, message: `Unknown action: ${action}` }, 400);

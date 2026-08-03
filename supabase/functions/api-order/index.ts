@@ -52,7 +52,7 @@ function json(body: unknown, status = 200) {
 const RATE_LIMIT = 30; // requests per minute
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Provider = "justicedata" | "pensite" | "hubnet" | "sparkdata" | "databosshub";
+type Provider = "justicedata" | "pensite" | "hubnet" | "sparkdata" | "databosshub" | "up2u";
 
 interface ProviderResult {
   success: boolean;
@@ -112,6 +112,14 @@ function mapDataBossHub(network: string): string {
   if (network === "telecel")    return "Telecel";
   if (network === "airteltigo") return "Airteltigo";
   return network;
+}
+
+// Up2u uses the same lowercase network keys we already use internally.
+function mapUp2u(network: string): string {
+  if (network === "mtn")        return "mtn";
+  if (network === "telecel")    return "telecel";
+  if (network === "airteltigo") return "airteltigo";
+  return network.toLowerCase();
 }
 
 // ── Providers (mirrors buy-data exactly) ──────────────────────────────────────
@@ -253,6 +261,60 @@ async function placeDataBossHubOrder(payload: OrderPayload): Promise<ProviderRes
   }
 }
 
+async function placeUp2uOrder(payload: OrderPayload): Promise<ProviderResult> {
+  const apiKey = Deno.env.get("UP2U_API_KEY");
+  if (!apiKey) return { success: false, error: "Up2u API key not configured" };
+
+  const networkKey    = mapUp2u(payload.network);
+  const packageSizeMB = payload.bundleSize * 1000; // Up2u expects MB, internal size is GB
+
+  try {
+    const res = await fetch("https://fmulclzwaohrzznsgalg.supabase.co/functions/v1/public-api", {
+      method: "POST",
+      headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action:       "place_order",
+        network:      networkKey,
+        recipient:    payload.phone,
+        package_size: packageSizeMB,
+        order_id:     payload.orderId,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      let parsedErr: any = {};
+      try { parsedErr = JSON.parse(errorText); } catch { /* not JSON */ }
+      switch (res.status) {
+        case 401: return { success: false, error: "Up2u error: unauthorized (invalid or missing API key)" };
+        case 400: return { success: false, error: `Up2u error: bad_request — ${parsedErr.message || errorText}` };
+        case 402: return { success: false, error: "Up2u error: insufficient_balance (provider wallet too low)" };
+        case 404: return { success: false, error: "Up2u error: not_found (bundle or order not found)" };
+        case 429: return { success: false, error: "Up2u error: rate_limited — back off and retry" };
+        default:  return { success: false, error: `Up2u HTTP ${res.status}: ${errorText}` };
+      }
+    }
+
+    const data = await res.json();
+    if (data.status_code !== 200 || !data.response) {
+      return { success: false, error: `Up2u error: ${data.response?.message || data.message || "Unknown error"}` };
+    }
+
+    return {
+      success: true,
+      data: {
+        ...data.response,
+        message:         data.response.message || "Order received and queued for processing.",
+        _provider:       "up2u",
+        _network_key:    networkKey,
+        _up2u_reference: data.response.order_reference,
+      },
+    };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Up2u unknown error" };
+  }
+}
+
 // ── Active provider dispatcher (reads system_settings) ────────────────────────
 async function placeOrder(
   supabase: any,
@@ -274,6 +336,7 @@ async function placeOrder(
     case "hubnet":      result = await placeHubnetOrder(payload);      break;
     case "sparkdata":   result = await placeSparkDataOrder(payload);   break;
     case "databosshub": result = await placeDataBossHubOrder(payload); break;
+    case "up2u":        result = await placeUp2uOrder(payload);      break;
     case "justicedata":
     default:            result = await placeJusticeDataOrder(payload); break;
   }
@@ -429,14 +492,17 @@ Deno.serve(async (req: Request) => {
   const activeProvider = orderResult.provider;
   const description    = `${networkRaw.toUpperCase()} ${bundleSize}GB Data Purchase (API)`;
 
-  // Always use 'processing' — whether the provider accepted instantly or
-  // this needs manual fulfilment is our internal concern, never the reseller's.
-  const orderStatus = "processing";
+  // Use 'manual_review' when the provider call fails so the order appears
+  // correctly flagged across ALL tabs (All Orders, API Orders, Recent Orders)
+  // from the moment it is created — matching the behaviour of store, guest,
+  // and registered-user orders that need manual attention.
+  // When the provider succeeded, use 'processing' as normal.
+  const orderStatus = apiSuccess ? "processing" : "manual_review";
 
   if (!apiSuccess) {
     // Provider failed — log internally for admin attention.
     // Wallet is NOT refunded — we still need those funds to fulfil manually.
-    console.warn(`[api-order] ${activeProvider} failed — flagged for manual processing. Error: ${orderResult.error}`);
+    console.warn(`[api-order] ${activeProvider} failed — flagged for manual_review. Error: ${orderResult.error}`);
   }
 
   // ── 10. Record in api_orders ──────────────────────────────────────────────
@@ -524,6 +590,7 @@ Deno.serve(async (req: Request) => {
 
   // ── 13. Return response ───────────────────────────────────────────────────
   // Always success — internal provider state is never exposed to the reseller.
+  // The reseller always sees "processing"; manual_review is an internal status.
   return json({
     status:     true,
     statusCode: 200,
@@ -535,7 +602,7 @@ Deno.serve(async (req: Request) => {
       phone:           phone!,
       amount_deducted: finalPrice,
       new_balance:     newBalance,
-      status:          "processing",
+      status:          "processing", // always "processing" to the reseller; internal status may differ
     },
   });
 });

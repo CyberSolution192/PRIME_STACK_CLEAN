@@ -512,6 +512,7 @@
                 setTimeout(() => toast.remove(), 300);
             }, 5000);
         }
+        window.showToast = showToast; // ← exposed for checkers-main.js (separate module)
         
         function showLoading(element) {
             element.innerHTML = `
@@ -646,6 +647,7 @@ async function navigateTo(page) {
         purchase: 'Buy Data',
         topup: 'Add Funds',
         history: 'Transaction History',
+        checkers: 'Results Checkers',
         store: 'My Store',
         storeOrders: 'Store Orders',
         settings: 'Settings',
@@ -670,6 +672,9 @@ async function navigateTo(page) {
             break;
         case 'history':
             await loadHistory();
+            break;
+        case 'checkers':
+            if (typeof window.loadCheckersPage === 'function') await window.loadCheckersPage();
             break;
         case 'purchase':
             resetPurchasePage();

@@ -26,7 +26,7 @@ import { serve }        from 'https://deno.land/std@0.177.0/http/server.ts';
 const SUPABASE_URL     = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ARKESEL_API_KEY  = Deno.env.get('ARKESEL_API_KEY')!;
-const ARKESEL_SENDER   = Deno.env.get('ARKESEL_SENDER_ID') ?? 'PRIMECONNECT';
+const ARKESEL_SENDER   = Deno.env.get('ARKESEL_SENDER_ID') ?? 'ESTECH';
 const ADMIN_PHONE      = Deno.env.get('ADMIN_ALERT_PHONE');  // e.g. 0241234567
 
 // ── Deduplication: track last alerted event ID so we never

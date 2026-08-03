@@ -425,11 +425,16 @@ Deno.serve(async (req) => {
       });
 
       const [ordersRes, withdrawalsRes] = await Promise.all([
+        // Store owner profit is only credited once an admin has explicitly
+        // marked the order "completed". "processing" means the order is
+        // still moving through the system and has NOT been confirmed
+        // delivered — it does NOT count as earned profit, nor do pending,
+        // processing_locked, manual_review, or failed orders.
         supabase
           .from("adminorders")
           .select("userid, amount, network, package_size, external_response")
           .or("order_reference.like.STORE-%,order_reference.like.GST-%,order_reference.like.PAY-%")
-          .in("status", ["completed", "processing"])
+          .eq("status", "completed")
           .in("external_response->>storeownerid" as any, ownerIds),
         // FIX (2026-05): user_note column deleted from withdrawal_requests.
         // All completed withdrawals for store owners are profit withdrawals —

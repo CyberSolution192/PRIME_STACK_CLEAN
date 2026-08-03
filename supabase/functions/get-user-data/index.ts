@@ -197,10 +197,15 @@ Deno.serve(async (req) => {
         // to the logic in admin-manage-users get-reseller-profits (2026-05).
         // ─────────────────────────────────────────────────────────────────────
         const [ordersRes, bundlesRes, ubpRes, completedWithdrawalsRes, pendingWithdrawalsRes] = await Promise.all([
+          // Store owner profit is only credited once an admin has explicitly
+          // marked the order "completed". "processing" means the order is
+          // still moving through the system and has NOT been confirmed
+          // delivered — it does NOT count as earned profit, nor do pending,
+          // processing_locked, manual_review, or failed orders.
           supabase.from("adminorders")
             .select("amount, network, package_size, external_response")
             .or("order_reference.like.STORE-%,order_reference.like.GST-%,order_reference.like.PAY-%")
-            .in("status", ["completed", "processing"])
+            .eq("status", "completed")
             .filter("external_response->>storeownerid", "eq", user.id),
           supabase.from("bundles").select("id, network, size, price").eq("active", true),
           supabase.from("user_bundle_prices")

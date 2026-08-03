@@ -233,10 +233,11 @@ serve(async (req) => {
   supabase.from("api_keys").select("id", { count: "exact", head: true }).eq("is_active", true),
   supabase.from("api_orders").select("id", { count: "exact", head: true }),
 
+  // "Pending" stat card = orders still awaiting action (pending + manual_review + processing)
   supabase
     .from("api_orders")
     .select("id", { count: "exact", head: true })
-    .in("status", ["processing", "payment_pending"]),
+    .in("status", ["pending", "processing", "manual_review", "payment_pending"]),
 
   supabase
     .from("api_orders")
@@ -278,10 +279,12 @@ serve(async (req) => {
       }, 400);
     }
     const allowedStatuses = [
+      "pending",
       "processing",
+      "manual_review",
       "completed",
       "failed",
-      "payment_pending"
+      "payment_pending",
     ];
 
     if (!allowedStatuses.includes(status)) {
@@ -315,7 +318,8 @@ serve(async (req) => {
         message: "Order not found"
       }, 404);
     }
-    // Keep adminorders in sync
+
+    // Keep adminorders in sync (bidirectional — this is the API Orders → All Orders direction)
     const { error: adminOrderError } = await supabase
       .from("adminorders")
       .update({
@@ -330,6 +334,13 @@ serve(async (req) => {
         adminOrderError.message
       );
     }
+
+    await auditLog(supabase, admin.user.id, "api_order_status_update", {
+      orderId,
+      reference: updatedOrder.order_reference,
+      toStatus:  status,
+    });
+
     return json({
       success: true,
       message: "Order status updated successfully"

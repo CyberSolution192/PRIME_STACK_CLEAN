@@ -20,6 +20,7 @@ serve(async (req) => {
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SRK = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SRK);
 
   // ── Verify admin auth ──────────────────────────────────────────────────────
   // ── Internal secret — only admin-proxy knows this value ─────────────────
