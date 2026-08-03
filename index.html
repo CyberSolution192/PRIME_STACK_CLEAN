@@ -27,7 +27,10 @@
     <link rel="stylesheet" href="./dist/app.css">
     <link rel="stylesheet" href="./dist/index.css">
       <script src="https://js.paystack.co/v1/inline.js"></script>
-     </head>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0284c7">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+</head>
      <body class="relative min-h-screen safe-top safe-bottom">
     
     <!-- Loading Overlay -->
@@ -617,5 +620,6 @@
 
     <!-- Application Script -->
     <script type="module" src="index-main.js"></script>
+    <script src="/pwa-install.js" defer></script>
 </body>
 </html>
