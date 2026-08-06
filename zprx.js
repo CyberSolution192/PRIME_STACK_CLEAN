@@ -5459,6 +5459,9 @@ rejectWithdrawal: async function(id) {
       mtn:       { bg: '#eab308', border: '#ca8a04' },
       telecel:   { bg: '#3b82f6', border: '#2563eb' },
       airteltigo:{ bg: '#ef4444', border: '#dc2626' },
+      'bece results checker':          { bg: '#22c55e', border: '#16a34a' },
+      'wassce results checker':        { bg: '#14b8a6', border: '#0d9488' },
+      'shs placement checker':         { bg: '#a855f7', border: '#9333ea' },
       unknown:   { bg: '#8b5cf6', border: '#7c3aed' },
     };
 

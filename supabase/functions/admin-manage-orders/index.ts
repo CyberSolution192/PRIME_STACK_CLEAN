@@ -1038,10 +1038,39 @@ supabase
       const { data: completedAmounts } = await supabase
         .from("adminorders").select("amount, created_at").eq("status", "completed");
 
-      const totalRevenue = (completedAmounts || []).reduce((sum, o) => sum + Math.abs(parseFloat(o.amount) || 0), 0);
-      const todayRevenue = (completedAmounts || [])
+      // Checker purchases (BECE/WASSCE/SHS Placement) live in a separate
+      // table and were previously never counted in revenue at all.
+      const { data: completedCheckerAmounts } = await supabase
+        .from("checker_orders").select("amount, created_at").eq("status", "completed");
+
+      const bundleRevenue  = (completedAmounts || []).reduce((sum, o) => sum + Math.abs(parseFloat(o.amount) || 0), 0);
+      const checkerRevenue = (completedCheckerAmounts || []).reduce((sum, o) => sum + Math.abs(parseFloat(o.amount) || 0), 0);
+      const totalRevenue = bundleRevenue + checkerRevenue;
+
+      const bundleRevenueToday = (completedAmounts || [])
         .filter(o => new Date(o.created_at) >= todayStart)
         .reduce((sum, o) => sum + Math.abs(parseFloat(o.amount) || 0), 0);
+      const checkerRevenueToday = (completedCheckerAmounts || [])
+        .filter(o => new Date(o.created_at) >= todayStart)
+        .reduce((sum, o) => sum + Math.abs(parseFloat(o.amount) || 0), 0);
+      const todayRevenue = bundleRevenueToday + checkerRevenueToday;
+
+      // Checker order counts — merged into the "user" bucket, since a
+      // checker purchase is always an authenticated-dashboard purchase,
+      // the same conceptual bucket as TXN- prefixed bundle orders (never
+      // guest or store, which stay bundle-only).
+      const [
+        { count: checkerTotalCount },
+        { count: checkerTodayCount },
+        { count: checkerCompletedCount },
+        { count: checkerPendingCount },
+      ] = await Promise.all([
+        supabase.from("checker_orders").select("id", { count: "exact", head: true }),
+        supabase.from("checker_orders").select("id", { count: "exact", head: true })
+          .gte("created_at", todayStart.toISOString()),
+        supabase.from("checker_orders").select("id", { count: "exact", head: true }).eq("status", "completed"),
+        supabase.from("checker_orders").select("id", { count: "exact", head: true }).eq("status", "manual_review"),
+      ]);
 
       // Trigger background snapshot refresh so next call gets the fast path.
       // Fire-and-forget — don't await, don't block the response.
@@ -1062,16 +1091,16 @@ supabase
         source: "live",
         revenue: { total: totalRevenue, today: todayRevenue },
         orders: {
-          total:        allOrdersRes.count       || 0,
-          today:        todayOrdersRes.count      || 0,
-          completed:    completedOrdersRes.count  || 0,
-          pending:      pendingOrdersRes.count    || 0,
+          total:        (allOrdersRes.count       || 0) + (checkerTotalCount     || 0),
+          today:        (todayOrdersRes.count      || 0) + (checkerTodayCount     || 0),
+          completed:    (completedOrdersRes.count  || 0) + (checkerCompletedCount || 0),
+          pending:      (pendingOrdersRes.count    || 0) + (checkerPendingCount   || 0),
           guest:        gstOrdersRes.count        || 0,
           store:        storeOrdersRes.count      || 0,
-          user:         txnOrdersRes.count        || 0,
+          user:         (txnOrdersRes.count        || 0) + (checkerTotalCount     || 0),
           pendingGuest: pendingGstRes.count       || 0,
           pendingStore: pendingStoreRes.count     || 0,
-          pendingUser:  pendingTxnRes.count       || 0,
+          pendingUser:  (pendingTxnRes.count       || 0) + (checkerPendingCount   || 0),
         },
  users: {
   total: totalUsersRes.count || 0,
@@ -1213,6 +1242,30 @@ supabase
       if (error) throw error;
       if (todayErr) throw todayErr;
 
+      // ── Checker orders (BECE/WASSCE/SHS Placement) ─────────────────────────
+      // Only merged in when viewing "all" — a network filter (mtn/telecel/
+      // airteltigo) is specifically asking for bundle data, so checkers are
+      // excluded from that view rather than silently included under none of
+      // the selected networks.
+      let checkerRows: { amount: string; created_at: string; checker_products?: { code: string; name: string } }[] = [];
+      let checkerTodayRows: { amount: string; status: string; created_at: string }[] = [];
+      if (networkFilter === "all") {
+        const [{ data: cRows }, { data: cTodayRows }] = await Promise.all([
+          supabase
+            .from("checker_orders")
+            .select("amount, created_at, checker_products(code, name)")
+            .eq("status", "completed")
+            .gte("created_at", periodStart.toISOString()),
+          supabase
+            .from("checker_orders")
+            .select("amount, status, created_at")
+            .gte("created_at", todayUTC.toISOString())
+            .lt("created_at", tomorrowUTC.toISOString()),
+        ]);
+        checkerRows = cRows || [];
+        checkerTodayRows = cTodayRows || [];
+      }
+
       // ── DEBUG: log what the DB actually returned for today ────────────────
       // Check your Supabase edge function logs to see these values.
       console.log("[orders-today-debug]", JSON.stringify({
@@ -1236,10 +1289,13 @@ supabase
         const dateMatch = r.created_at.slice(0, 10) === todayStr2;
         return withinUTC || dateMatch;
       });
-      const totalOrdersToday       = todayRows.length;
+      const totalOrdersToday        = todayRows.length + checkerTodayRows.length;
       const revenueTodayAllStatuses = todayRows
         .filter(r => r.status !== "failed")
-        .reduce((sum, r) => sum + Math.abs(parseFloat(r.amount) || 0), 0);
+        .reduce((sum, r) => sum + Math.abs(parseFloat(r.amount) || 0), 0)
+        + checkerTodayRows
+          .filter(r => r.status !== "failed" && r.status !== "refunded")
+          .reduce((sum, r) => sum + Math.abs(parseFloat(r.amount) || 0), 0);
 
       const rows = orders || [];
 
@@ -1259,14 +1315,29 @@ supabase
         if (dateStr === todayStr)       { revenueToday += amt; } // ordersToday now counted via totalOrdersToday (all statuses)
         if (dateStr >= weekStartStr)    { ordersThisWeek++; }
       }
+      // Checker orders (completed, in period) — same accumulation, merged in.
+      for (const o of checkerRows) {
+        const amt     = Math.abs(parseFloat(o.amount) || 0);
+        const dateStr = (o.created_at || "").slice(0, 10);
+        periodRevenue += amt;
+        if (dateStr === todayStr)       { revenueToday += amt; }
+        if (dateStr >= weekStartStr)    { ordersThisWeek++; }
+      }
 
-      const periodOrders = rows.length;
+      const periodOrders = rows.length + checkerRows.length;
       const avgOrderValue = periodOrders > 0 ? periodRevenue / periodOrders : 0;
 
       // ── Daily revenue grouped by date ──────────────────────────────────────
       // Build a map date→{revenue,orders} then fill every date in the period
       const dailyMap: Record<string, { revenue: number; orders: number }> = {};
       for (const o of rows) {
+        const d   = (o.created_at || "").slice(0, 10);
+        const amt = Math.abs(parseFloat(o.amount) || 0);
+        if (!dailyMap[d]) dailyMap[d] = { revenue: 0, orders: 0 };
+        dailyMap[d].revenue += amt;
+        dailyMap[d].orders++;
+      }
+      for (const o of checkerRows) {
         const d   = (o.created_at || "").slice(0, 10);
         const amt = Math.abs(parseFloat(o.amount) || 0);
         if (!dailyMap[d]) dailyMap[d] = { revenue: 0, orders: 0 };
@@ -1283,18 +1354,30 @@ supabase
         cursor.setUTCDate(cursor.getUTCDate() + 1);
       }
 
-      // ── Revenue by network ─────────────────────────────────────────────────
-      const networkMap: Record<string, { revenue: number; orders: number }> = {};
+      // ── Revenue by network (+ checker categories) ───────────────────────────
+      const networkMap: Record<string, { revenue: number; orders: number; label?: string }> = {};
       for (const o of rows) {
         const net = (o.network || "unknown").toLowerCase();
         if (!networkMap[net]) networkMap[net] = { revenue: 0, orders: 0 };
         networkMap[net].revenue += Math.abs(parseFloat(o.amount) || 0);
         networkMap[net].orders++;
       }
+      // Checkers use their product name as the category label instead of a
+      // network — e.g. "BECE", "WASSCE", "SHS Placement" — so they show up
+      // as their own rows/slices in the same breakdown, not lumped together.
+      // Keyed by lowercase for grouping, but the original casing is kept in
+      // `label` so the display doesn't come out as "Bece" / "Shs placement".
+      for (const o of checkerRows) {
+        const label = o.checker_products?.name || o.checker_products?.code || "Checker";
+        const key = label.toLowerCase();
+        if (!networkMap[key]) networkMap[key] = { revenue: 0, orders: 0, label };
+        networkMap[key].revenue += Math.abs(parseFloat(o.amount) || 0);
+        networkMap[key].orders++;
+      }
 
       const byNetwork = Object.entries(networkMap)
         .map(([network, stats]) => ({
-          network,
+          network: stats.label || network,
           revenue: parseFloat(stats.revenue.toFixed(2)),
           orders:  stats.orders,
           share:   periodRevenue > 0
