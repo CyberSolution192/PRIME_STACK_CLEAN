@@ -49,14 +49,15 @@ const IS_PRODUCTION = Deno.env.get('ENVIRONMENT') === 'production';
 const ALLOWED_ORIGINS = new Set([
   "https://primeconnect.site",
   "https://primestacktec.netlify.app",
-  ...( IS_PRODUCTION ? [] : [
-    'http://127.0.0.1:5500',
-    'http://127.0.0.1:5501',
-    'http://localhost:5500',
-    'http://localhost:5501',
-    "http://localhost:3000", 
-  ]),
 ]);
+
+// Any http://localhost:<port> or http://127.0.0.1:<port> is allowed in
+// non-production environments. Live Server (and similar tools) pick a new
+// port whenever the previous one is already in use, so a fixed allow-list
+// (5500, 5501, 5503, ...) constantly falls out of date and silently breaks
+// CORS with the sentinel 'https://no-cors-for-you' origin. This regex covers
+// every local dev port without needing to edit + redeploy each time.
+const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):\d+$/;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -68,7 +69,9 @@ function serviceClient() {
 
 function getAllowedOrigin(req: Request): string {
   const origin = req.headers.get('Origin') ?? '';
-  return ALLOWED_ORIGINS.has(origin) ? origin : 'https://no-cors-for-you';
+  if (ALLOWED_ORIGINS.has(origin)) return origin;
+  if (!IS_PRODUCTION && LOCAL_DEV_ORIGIN_RE.test(origin)) return origin;
+  return 'https://no-cors-for-you';
 }
 
 function parseCookie(header: string | null, name: string): string | null {
@@ -194,6 +197,17 @@ serve(async (req: Request) => {
 
   if (req.method !== 'POST') {
     return json({ error: 'Method not allowed' }, 405, {}, req);
+  }
+
+  // ── Explicitly enforce the origin check ─────────────────────────────────────
+  // This endpoint's custom x-target-function header already forces a CORS
+  // preflight (custom headers can't be set by a plain form or a no-cors
+  // fetch), and the browser blocks the real request when that preflight's
+  // origin doesn't match — so this was already indirectly protected. Adding
+  // the explicit check here anyway rather than relying only on that browser
+  // side effect, and to match the same guarantee now enforced in user-proxy.
+  if (origin === 'https://no-cors-for-you') {
+    return json({ error: 'Origin not allowed' }, 403, {}, req);
   }
 
   // ── 1. Identify target function from header ────────────────────────────────

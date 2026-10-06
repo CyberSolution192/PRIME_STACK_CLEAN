@@ -1,18 +1,31 @@
 /**
  * reconcile-stale-orders — Supabase Edge Function
  *
- * Finds orders stuck in status='processing' with provider='up2u' for longer
- * than STALE_MINUTES, checks their real status via Up2u's GET /order/:order_id,
- * and syncs the result back through admin-manage-orders (action=update-status)
- * so all the existing multi-table sync logic there (transactions, guest_orders,
- * api_orders, store totals) runs exactly as it would for a manual admin change.
+ * Finds orders stuck in status='processing' for longer than STALE_MINUTES and
+ * tries to resolve their real status, then syncs the result back through
+ * admin-manage-orders (action=update-status) so all the existing multi-table
+ * sync logic there (transactions, guest_orders, api_orders, store totals) runs
+ * exactly as it would for a manual admin change.
+ *
+ * Per-provider behavior:
+ *   - up2u: checked via Up2u's GET /order/:order_id — real status resolution.
+ *   - bundlezonegh: Bundle Zone GH's API has NO documented order-status or
+ *     order-lookup-by-reference endpoint (only place_order, check_balance,
+ *     get_bundles, get_transactions — none of which reliably identify a
+ *     single order by our reference). Rather than guess-matching against
+ *     get_transactions (risking a wrong status write on a financial record),
+ *     bundlezonegh orders skip live verification entirely and go straight
+ *     through the same escalate-after-ESCALATE_MINUTES safety net used when
+ *     an up2u order has no stored provider reference. If Bundle Zone GH later
+ *     documents a real order-status endpoint, wire it in here the same way
+ *     Up2u's is wired in below.
  *
  * This function does NOT write to adminorders/transactions directly — it always
  * routes through admin-manage-orders, acting as a "system" admin, so there's
  * exactly one place that owns status-transition side effects.
  *
  * Escalation: orders unresolved past ESCALATE_MINUTES get flagged into
- * admin_alerts for manual review, even if Up2u's API can't explain why.
+ * admin_alerts for manual review, even if the provider's API can't explain why.
  *
  * Auth: service-role bearer only (same pattern as refresh-stat).
  *
@@ -85,20 +98,22 @@ serve(async (req) => {
     return json({ success: false, message: "Unauthorized" }, 401);
   }
 
-  if (!UP2U_API_KEY)    return json({ success: false, message: "Up2u API key not configured" }, 500);
   if (!INTERNAL_SECRET) return json({ success: false, message: "ADMIN_INTERNAL_SECRET not configured" }, 500);
   if (!SYSTEM_ADMIN_ID) return json({ success: false, message: "SYSTEM_ADMIN_USER_ID not configured" }, 500);
+  // UP2U_API_KEY is only required if there turn out to be stale up2u orders in
+  // this batch — checked per-order below, so a missing key doesn't block
+  // bundlezonegh (or future providers) from being escalated.
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
   const staleCutoff = new Date(Date.now() - STALE_MINUTES * 60_000).toISOString();
   const escalateCutoff = new Date(Date.now() - ESCALATE_MINUTES * 60_000).toISOString();
 
-  // ── Find stale up2u orders still stuck in 'processing' ────────────────────
+  // ── Find stale orders still stuck in 'processing' for any reconcilable provider ──
   const { data: staleOrders, error: fetchError } = await supabase
     .from("adminorders")
     .select("id, order_reference, status, updated_at, external_response")
     .eq("status", "processing")
-    .filter("external_response->>provider", "eq", "up2u")
+    .filter("external_response->>provider", "in", "(up2u,bundlezonegh)")
     .lt("updated_at", staleCutoff)
     .order("updated_at", { ascending: true })
     .limit(BATCH_SIZE);
@@ -118,13 +133,35 @@ serve(async (req) => {
 
   for (const order of staleOrders) {
     checked++;
-    const reference = order.external_response?._up2u_reference;
+    const provider: string = order.external_response?.provider || "unknown";
     const isPastEscalation = order.updated_at < escalateCutoff;
+
+    // ── Bundle Zone GH: no order-status endpoint exists, so there's nothing to
+    // poll. Skip straight to the same time-based escalation safety net used
+    // for up2u orders with no stored reference. ────────────────────────────
+    if (provider === "bundlezonegh") {
+      if (isPastEscalation) {
+        await escalate(supabase, order, "Order stuck in processing — Bundle Zone GH has no order-status API to auto-verify against; needs manual review.", provider);
+        escalated++;
+      }
+      continue;
+    }
+
+    if (!UP2U_API_KEY) {
+      console.warn(`[reconcile-stale-orders] ${order.order_reference} — UP2U_API_KEY not configured, cannot check`);
+      if (isPastEscalation) {
+        await escalate(supabase, order, "Order stuck in processing — Up2u API key not configured, cannot auto-reconcile.", provider);
+        escalated++;
+      }
+      continue;
+    }
+
+    const reference = order.external_response?._up2u_reference;
 
     if (!reference) {
       console.warn(`[reconcile-stale-orders] ${order.order_reference} has no _up2u_reference — cannot check`);
       if (isPastEscalation) {
-        await escalate(supabase, order, "Order stuck in processing with no provider reference stored — cannot auto-reconcile.");
+        await escalate(supabase, order, "Order stuck in processing with no provider reference stored — cannot auto-reconcile.", provider);
         escalated++;
       }
       continue;
@@ -139,7 +176,7 @@ serve(async (req) => {
       if (!res.ok) {
         console.warn(`[reconcile-stale-orders] ${order.order_reference} — Up2u HTTP ${res.status}`);
         if (isPastEscalation) {
-          await escalate(supabase, order, `Up2u order lookup failed repeatedly (HTTP ${res.status}) past ${ESCALATE_MINUTES} minutes.`);
+          await escalate(supabase, order, `Up2u order lookup failed repeatedly (HTTP ${res.status}) past ${ESCALATE_MINUTES} minutes.`, provider);
           escalated++;
         }
         await sleep(SLEEP_MS);
@@ -163,13 +200,13 @@ serve(async (req) => {
           console.error(`[reconcile-stale-orders] ${order.order_reference} — failed to sync status via admin-manage-orders`);
         }
       } else if (isPastEscalation) {
-        await escalate(supabase, order, `Up2u still reports "${deliveryStatus || "unknown"}" after ${ESCALATE_MINUTES} minutes.`);
+        await escalate(supabase, order, `Up2u still reports "${deliveryStatus || "unknown"}" after ${ESCALATE_MINUTES} minutes.`, provider);
         escalated++;
       }
     } catch (err) {
       console.error(`[reconcile-stale-orders] ${order.order_reference} — error:`, err);
       if (isPastEscalation) {
-        await escalate(supabase, order, `Reconciliation check threw an error: ${err instanceof Error ? err.message : "unknown"}`);
+        await escalate(supabase, order, `Reconciliation check threw an error: ${err instanceof Error ? err.message : "unknown"}`, provider);
         escalated++;
       }
     }
@@ -213,7 +250,7 @@ async function syncStatus(
 }
 
 // ── Flag an order for manual admin attention ─────────────────────────────────
-async function escalate(supabase: any, order: any, message: string) {
+async function escalate(supabase: any, order: any, message: string, provider: string) {
   await raiseAlert(supabase, {
     type: "order_escalated",
     severity: "HIGH",
@@ -221,7 +258,7 @@ async function escalate(supabase: any, order: any, message: string) {
     details: {
       order_id: order.id,
       order_reference: order.order_reference,
-      provider: "up2u",
+      provider,
       stuck_since: order.updated_at,
     },
   });

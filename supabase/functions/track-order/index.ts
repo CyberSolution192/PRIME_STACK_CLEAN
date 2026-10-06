@@ -14,6 +14,7 @@
  */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit, getClientIp } from "../_shared/rate-limit.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -64,6 +65,15 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // Tighter than the general public ceiling — this endpoint is
+    // enumeration-sensitive (guessing phone numbers against a known
+    // store_owner_id), so it should slow down repeated guessing, not just
+    // block outright flooding.
+    const rate = await checkRateLimit(supabase, `public:track-order:${getClientIp(req)}`, 30, 60_000);
+    if (!rate.allowed) {
+      return json({ success: false, message: "Too many requests", retry_after_seconds: rate.retryAfter }, 429);
+    }
 
     const { data: orders, error } = await supabase
       .from("adminorders")

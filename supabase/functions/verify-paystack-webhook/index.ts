@@ -1,3 +1,16 @@
+// ⚠️ LIKELY ORPHANED — found during a security review (Sep 2026):
+//   - No frontend file references this function's URL anywhere in the codebase
+//   - Its own header comment below says "verify-paystack/index.ts", not
+//     "verify-paystack-webhook/index.ts" — looks like a copy left over from
+//     an earlier refactor rather than a deliberately separate live function
+//   - paystack-webhook (a different function) is the one actually wired up
+//     as the live Paystack webhook receiver
+//
+// Before deleting: check your Paystack Dashboard → Settings → API Keys &
+// Webhooks → Webhook URL. If it points at paystack-webhook (not this file),
+// this one is safe to remove — it's dead code sitting at a live, deployed
+// URL doing nothing useful, which is its own small risk (an unmonitored
+// endpoint nobody's paying attention to).
 // ============================================================
 // supabase/functions/verify-paystack/index.ts
 // ============================================================

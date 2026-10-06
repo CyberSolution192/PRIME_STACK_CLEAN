@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://rpolemxgussziexdmdxe.supabase.co wss://rpolemxgussziexdmdxe.supabase.co; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; base-uri 'self'; form-action 'self'; object-src 'none';">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="Referrer-Policy" content="no-referrer">
     <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()">
@@ -21,6 +22,16 @@
     <!-- Custom styles for admin portal -->
     <link rel="stylesheet" href="./dist/app.css">
     <link rel="stylesheet" href="./dist/admin.css">
+    <style>
+        /* SMS Gateway provider switcher */
+        .sms-provider-card { border: 2px solid #e2e8f0; background: #fff; transition: border-color .15s, background-color .15s; }
+        .sms-provider-card.is-active { border-color: #86efac; background: #f0fdf4; }
+        .sms-provider-card.is-unconfigured { opacity: .75; }
+        .sms-switch-btn { background: #f1f5f9; color: #334155; }
+        .sms-switch-btn:hover:not(:disabled) { background: #e2e8f0; }
+        .sms-switch-btn:disabled { cursor: not-allowed; opacity: .7; }
+        .sms-provider-card.is-active .sms-switch-btn { background: #dcfce7; color: #166534; }
+    </style>
     </head>
 <body class="relative min-h-screen safe-top safe-bottom">
     <!-- Mobile Sidebar Overlay -->
@@ -338,10 +349,10 @@
                                     <p class="text-brand-100 opacity-90">Monitor system performance and manage operations</p>
                                 </div>
                                 <div class="flex gap-3">
-                                    <button onclick="admin.navigateTo('all-orders')" class="bg-white text-brand-900 font-bold px-5 py-3 rounded-lg hover:bg-brand-50 transition-colors text-center">
+                                    <button data-action="navigate" data-arg="all-orders" class="bg-white text-brand-900 font-bold px-5 py-3 rounded-lg hover:bg-brand-50 transition-colors text-center">
                                         <i class="fas fa-shopping-cart mr-2"></i> View Orders
                                     </button>
-                                    <button onclick="admin.navigateTo('users')" class="bg-white/10 hover:bg-white/20 text-white font-bold px-5 py-3 rounded-lg transition-colors text-center border border-white/20">
+                                    <button data-action="navigate" data-arg="users" class="bg-white/10 hover:bg-white/20 text-white font-bold px-5 py-3 rounded-lg transition-colors text-center border border-white/20">
                                         <i class="fas fa-users mr-2"></i> Manage Users
                                     </button>
                                 </div>
@@ -361,7 +372,7 @@
                                     <span id="sparkdata-pending-count" class="font-bold">0</span> order(s) failed to deliver automatically and require manual fulfillment.
                                 </p>
                                 <div id="sparkdata-pending-list" class="mt-3 space-y-2 text-sm"></div>
-                                <button onclick="admin.navigateTo('all-orders')" class="mt-3 bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors">
+                                <button data-action="navigate" data-arg="all-orders" class="mt-3 bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors">
                                     <i class="fas fa-list mr-1"></i> View Orders Requiring Attention
                                 </button>
                             </div>
@@ -497,7 +508,7 @@
                             <div class="p-5 border-b border-slate-100">
                                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                     <h3 class="text-lg font-bold text-slate-800">Recent Orders</h3>
-                                    <button onclick="admin.navigateTo('all-orders')" class="text-sm font-medium text-brand-600 hover:text-brand-700">
+                                    <button data-action="navigate" data-arg="all-orders" class="text-sm font-medium text-brand-600 hover:text-brand-700">
                                         View All <i class="fas fa-arrow-right ml-1"></i>
                                     </button>
                                 </div>
@@ -703,23 +714,23 @@
 
                     <!-- ── Tab Bar ───────────────────────────────────────── -->
                     <div class="flex gap-1 mb-6 bg-slate-100 p-1 rounded-xl overflow-x-auto">
-                        <button onclick="switchDepositTab('manual-deposits')" id="dep-tab-manual"
+                        <button data-action="switch-deposit-tab" data-arg="manual-deposits" id="dep-tab-manual"
                             class="deposit-tab flex-1 min-w-max flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all bg-white text-slate-800 shadow">
                             <i class="fas fa-hand-holding-usd text-brand-600"></i>
                             <span>Manual Deposits</span>
                             <span id="pending-deposits-count-tab" class="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full hidden">0</span>
                         </button>
-                        <button onclick="switchDepositTab('paystack-history')" id="dep-tab-paystack"
+                        <button data-action="switch-deposit-tab" data-arg="paystack-history" id="dep-tab-paystack"
                             class="deposit-tab flex-1 min-w-max flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all text-slate-600 hover:bg-white/60">
                             <i class="fas fa-credit-card text-green-500"></i>
                             <span>Paystack History</span>
                         </button>
-                        <button onclick="switchDepositTab('direct-purchase')" id="dep-tab-direct"
+                        <button data-action="switch-deposit-tab" data-arg="direct-purchase" id="dep-tab-direct"
                             class="deposit-tab flex-1 min-w-max flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all text-slate-600 hover:bg-white/60">
                             <i class="fas fa-shopping-bag text-blue-500"></i>
                             <span>Direct Purchase</span>
                         </button>
-                        <button onclick="switchDepositTab('orphaned-payments')" id="dep-tab-orphan"
+                        <button data-action="switch-deposit-tab" data-arg="orphaned-payments" id="dep-tab-orphan"
                             class="deposit-tab flex-1 min-w-max flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all text-slate-600 hover:bg-white/60">
                             <i class="fas fa-exclamation-circle text-orange-500"></i>
                             <span>Orphaned & Recovered</span>
@@ -789,24 +800,24 @@
                                     </h2>
                                     <p class="text-slate-500 text-sm">All payment issues across every flow — guest, store, wallet top-up, and registered users. The webhook safety net auto-recovers most cases; use this to review and resolve what remains.</p>
                                 </div>
-                                <button onclick="admin.loadOrphanedPayments()" class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium whitespace-nowrap">
+                                <button data-action="load-orphaned-payments" class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium whitespace-nowrap">
                                     <i class="fas fa-sync mr-1"></i> Scan All
                                 </button>
                             </div>
 
                             <!-- Sub-tabs -->
                             <div class="flex gap-2 mb-4 border-b border-slate-200 overflow-x-auto">
-                                <button onclick="admin.switchOrphanTab('webhook-orphans')" id="tab-webhook-orphans"
+                                <button data-action="switch-orphan-tab" data-arg="webhook-orphans" id="tab-webhook-orphans"
                                     class="orphan-tab px-4 py-2 text-sm font-medium border-b-2 border-orange-500 text-orange-600 whitespace-nowrap">
                                     <i class="fas fa-robot mr-1"></i> Webhook Catches
                                     <span id="orphan-tab-count" class="ml-1 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full hidden">0</span>
                                 </button>
-                                <button onclick="admin.switchOrphanTab('unprocessed-webhooks')" id="tab-unprocessed-webhooks"
+                                <button data-action="switch-orphan-tab" data-arg="unprocessed-webhooks" id="tab-unprocessed-webhooks"
                                     class="orphan-tab px-4 py-2 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap">
                                     <i class="fas fa-clock mr-1"></i> Unprocessed Events
                                     <span id="unprocessed-tab-count" class="ml-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full hidden">0</span>
                                 </button>
-                                <button onclick="admin.switchOrphanTab('legacy-scan')" id="tab-legacy-scan"
+                                <button data-action="switch-orphan-tab" data-arg="legacy-scan" id="tab-legacy-scan"
                                     class="orphan-tab px-4 py-2 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap">
                                     <i class="fas fa-search mr-1"></i> Manual Scan
                                 </button>
@@ -846,11 +857,11 @@
 
                     <!-- Manual Order Creation Modal (kept here — used by orphan panel) -->
                     <div id="manual-order-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
-                        <div class="absolute inset-0 bg-black/50" onclick="document.getElementById('manual-order-modal').classList.add('hidden');document.getElementById('manual-order-modal').classList.remove('flex');"></div>
+                        <div class="absolute inset-0 bg-black/50" data-action="close-manual-order-modal"></div>
                         <div class="bg-white rounded-xl w-full max-w-md relative z-10 shadow-xl">
                             <div class="p-5 border-b border-slate-100 flex justify-between items-center">
                                 <h3 class="font-bold text-slate-800 text-lg">Create Manual Order</h3>
-                                <button onclick="document.getElementById('manual-order-modal').classList.add('hidden');document.getElementById('manual-order-modal').classList.remove('flex');" class="p-2 text-slate-400 hover:text-slate-600">
+                                <button data-action="close-manual-order-modal" class="p-2 text-slate-400 hover:text-slate-600">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
@@ -880,8 +891,8 @@
                                     <input type="number" id="mo-size" min="1" placeholder="e.g. 5" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
                                 </div>
                                 <div class="flex gap-3 pt-2">
-                                    <button onclick="document.getElementById('manual-order-modal').classList.add('hidden');document.getElementById('manual-order-modal').classList.remove('flex');" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium py-2.5 px-4 rounded-lg text-sm transition-colors">Cancel</button>
-                                    <button onclick="admin.submitManualOrder()" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 px-4 rounded-lg text-sm transition-colors">Create Order</button>
+                                    <button data-action="close-manual-order-modal" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium py-2.5 px-4 rounded-lg text-sm transition-colors">Cancel</button>
+                                    <button data-action="submit-manual-order" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 px-4 rounded-lg text-sm transition-colors">Create Order</button>
                                 </div>
                             </div>
                         </div>
@@ -966,22 +977,72 @@
                                     <p class="text-slate-500">Send targeted SMS updates to your users</p>
                                 </div>
                                 <div class="text-right">
-                                    <p class="text-sm text-slate-600">SMS Balance</p>
+                                    <p class="text-sm text-slate-600">SMS Balance <span class="text-xs text-slate-400" id="sms-balance-provider"></span></p>
                                     <p class="text-2xl font-bold text-brand-600" id="sms-balance">--</p>
-                                    <button onclick="checkSMSBalance()" class="text-xs text-brand-600 hover:underline mt-1">
+                                    <button data-action="check-sms-balance" class="text-xs text-brand-600 hover:underline mt-1">
                                         <i class="fas fa-sync-alt mr-1"></i> Refresh
                                     </button>
                                 </div>
                             </div>
                         </div>
 
+                        <!-- SMS Gateway Provider (manual switch) -->
+                        <div class="card p-5 md:p-6">
+                            <div class="flex items-start justify-between gap-3 mb-4">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-slate-700">SMS Gateway</h3>
+                                    <p class="text-sm text-slate-500">Choose which provider sends every SMS. Switch manually if one is down or low on funds.</p>
+                                </div>
+                                <button data-action="refresh-sms-providers" class="text-xs text-brand-600 hover:underline whitespace-nowrap">
+                                    <i class="fas fa-sync-alt mr-1"></i> Refresh
+                                </button>
+                            </div>
+
+                            <div class="flex items-center gap-3 p-4 rounded-xl mb-4 bg-green-50 border border-green-200">
+                                <div class="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+                                <div>
+                                    <p class="text-sm font-semibold text-green-800">Active Provider: <span id="sms-active-provider-name">Loading...</span></p>
+                                    <p class="text-xs text-green-600">All SMS (broadcasts, tests and alerts) will go through this provider</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="sms-provider-card rounded-xl p-4" data-sms-provider="arkesel">
+                                    <div class="flex items-start justify-between mb-3">
+                                        <div class="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                                            <i class="fas fa-sms text-orange-500"></i>
+                                        </div>
+                                        <span class="sms-provider-badge text-xs px-2 py-1 rounded-full font-medium bg-slate-100 text-slate-600">Loading</span>
+                                    </div>
+                                    <h4 class="font-bold text-slate-800 mb-1">Arkesel</h4>
+                                    <p class="text-xs text-slate-500 mb-1">arkesel.com</p>
+                                    <p class="text-xs text-slate-600 mb-4">Balance: <span class="sms-provider-balance font-semibold">--</span></p>
+                                    <button data-action="switch-sms-provider" data-arg="arkesel" class="sms-switch-btn w-full py-2 px-3 rounded-lg text-sm font-medium transition-colors" disabled>Switch to Arkesel</button>
+                                </div>
+
+                                <div class="sms-provider-card rounded-xl p-4" data-sms-provider="bms">
+                                    <div class="flex items-start justify-between mb-3">
+                                        <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                                            <i class="fas fa-comment-dots text-blue-500"></i>
+                                        </div>
+                                        <span class="sms-provider-badge text-xs px-2 py-1 rounded-full font-medium bg-slate-100 text-slate-600">Loading</span>
+                                    </div>
+                                    <h4 class="font-bold text-slate-800 mb-1">BMS Africa</h4>
+                                    <p class="text-xs text-slate-500 mb-1">app.bms.africa</p>
+                                    <p class="text-xs text-slate-600 mb-4">Balance: <span class="sms-provider-balance font-semibold">--</span></p>
+                                    <button data-action="switch-sms-provider" data-arg="bms" class="sms-switch-btn w-full py-2 px-3 rounded-lg text-sm font-medium transition-colors" disabled>Switch to BMS Africa</button>
+                                </div>
+                            </div>
+                            <p id="sms-provider-status" class="text-sm mt-3 min-h-[1.25rem]"></p>
+                        </div>
+
                         <!-- Tabs: Compose / Logs -->
                         <div class="flex gap-1 bg-slate-100 rounded-xl p-1">
-                            <button id="sms-tab-compose" onclick="switchSMSTab('compose')"
+                            <button id="sms-tab-compose" data-action="switch-sms-tab" data-arg="compose"
                                 class="sms-tab flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors bg-white text-slate-800 shadow">
                                 <i class="fas fa-paper-plane mr-2"></i>Compose
                             </button>
-                            <button id="sms-tab-logs" onclick="switchSMSTab('logs')"
+                            <button id="sms-tab-logs" data-action="switch-sms-tab" data-arg="logs"
                                 class="sms-tab flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors text-slate-500 hover:text-slate-700">
                                 <i class="fas fa-history mr-2"></i>Send Logs
                             </button>
@@ -1111,7 +1172,7 @@
                                                         Recipients: <strong id="sms-recipient-count" class="text-brand-700">—</strong>
                                                     </span>
                                                 </div>
-                                                <button type="button" onclick="previewSMSRecipients()"
+                                                <button type="button" data-action="preview-sms-recipients"
                                                     class="text-xs text-brand-600 hover:underline font-medium flex items-center gap-1">
                                                     <i class="fas fa-sync-alt"></i> Refresh
                                                 </button>
@@ -1137,11 +1198,11 @@
                                     <div class="mb-3">
                                         <p class="text-xs text-slate-500 mb-2"><i class="fas fa-magic mr-1"></i> Quick templates</p>
                                         <div class="flex flex-wrap gap-2">
-                                            <button type="button" onclick="useSMSTemplate('maintenance')" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-medium">🛠️ Maintenance</button>
-                                            <button type="button" onclick="useSMSTemplate('promo')" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-medium">🎉 Promotion</button>
-                                            <button type="button" onclick="useSMSTemplate('update')" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-medium">📢 Update</button>
-                                            <button type="button" onclick="useSMSTemplate('reminder')" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-medium">⏰ Reminder</button>
-                                            <button type="button" onclick="useSMSTemplate('lowbalance')" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-medium">💳 Low Balance</button>
+                                            <button type="button" data-action="use-sms-template" data-arg="maintenance" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-medium">🛠️ Maintenance</button>
+                                            <button type="button" data-action="use-sms-template" data-arg="promo" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-medium">🎉 Promotion</button>
+                                            <button type="button" data-action="use-sms-template" data-arg="update" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-medium">📢 Update</button>
+                                            <button type="button" data-action="use-sms-template" data-arg="reminder" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-medium">⏰ Reminder</button>
+                                            <button type="button" data-action="use-sms-template" data-arg="lowbalance" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-medium">💳 Low Balance</button>
                                         </div>
                                     </div>
                                     <textarea id="sms-message" rows="4" maxlength="160"
@@ -1175,7 +1236,7 @@
                             <div class="card p-5">
                                 <div class="flex items-center justify-between mb-4">
                                     <h3 class="font-semibold text-slate-800">Recent SMS Sends</h3>
-                                    <button onclick="loadSMSLogs()" class="text-xs text-brand-600 hover:underline">
+                                    <button data-action="load-sms-logs" class="text-xs text-brand-600 hover:underline">
                                         <i class="fas fa-sync-alt mr-1"></i>Refresh
                                     </button>
                                 </div>
@@ -1309,7 +1370,7 @@
                 <h2 class="text-xl md:text-2xl font-bold text-slate-800">Store Owner Profits</h2>
                 <p class="text-slate-500">Track earnings for users with active stores — regular users are excluded</p>
             </div>
-            <button onclick="admin.loadUserProfits()" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg text-sm">
+            <button data-action="load-user-profits" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg text-sm">
                 <i class="fas fa-sync-alt mr-2"></i>Refresh
             </button>
         </div>
@@ -1596,8 +1657,43 @@
                                             </button>
                                         </div>
 
+                                        <!-- Bundle Zone GH -->
+                                        <div class="provider-card rounded-xl border-2 p-4 transition-all" data-provider="bundlezonegh">
+                                            <div class="flex items-start justify-between mb-3">
+                                                <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                                                    <i class="fas fa-bolt text-blue-600"></i>
+                                                </div>
+                                                <span class="provider-badge hidden text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">
+                                                    <i class="fas fa-check-circle mr-1"></i>Active
+                                                </span>
+                                            </div>
+                                            <h4 class="font-bold text-slate-800 mb-1">Bundle Zone GH</h4>
+                                            <p class="text-xs text-slate-500 mb-4">bundlezonegh.com · x-api-key</p>
+                                            <button class="switch-provider-btn w-full py-2 px-3 rounded-lg text-sm font-medium transition-colors" data-provider="bundlezonegh">
+                                                Switch to Bundle Zone GH
+                                            </button>
+                                        </div>
+
                                     </div>
                                     <p id="provider-status" class="text-sm mt-3 h-5"></p>
+                                </div>
+
+                                <!-- Trusted Devices -->
+                                <div class="pt-6 border-t border-slate-200">
+                                    <h3 class="text-lg font-semibold text-slate-700 mb-1">
+                                        <i class="fas fa-laptop-mobile text-brand-500 mr-2"></i>Trusted Devices
+                                    </h3>
+                                    <p class="text-sm text-slate-500 mb-4">Devices that skip the OTP step for 30 days after your first login. Revoke any you don't recognise.</p>
+
+                                    <div id="trusted-devices-list" class="space-y-3">
+                                        <p class="text-sm text-slate-400">Loading...</p>
+                                    </div>
+
+                                    <button id="revoke-all-devices-btn"
+                                        class="mt-4 bg-red-50 hover:bg-red-100 text-red-600 font-medium py-2 px-4 rounded-lg transition-colors text-sm">
+                                        <i class="fas fa-ban mr-1"></i> Sign Out All Devices
+                                    </button>
+                                    <p id="trusted-devices-status" class="text-sm mt-2 h-5"></p>
                                 </div>
 
                                 <!-- Announcement Ticker -->
@@ -2087,12 +2183,12 @@
                     <!-- Sub-tabs: Overview | Export -->
                     <div class="flex gap-1 bg-slate-100 rounded-xl p-1 w-full sm:w-auto self-start">
                       <button id="analytics-tab-overview"
-                              onclick="switchAnalyticsTab('overview')"
+                              data-action="switch-analytics-tab" data-arg="overview"
                               class="analytics-tab flex-1 sm:flex-none py-2 px-5 rounded-lg text-sm font-medium transition-colors bg-white text-slate-800 shadow">
                         <i class="fas fa-chart-bar mr-2 text-brand-500"></i>Overview
                       </button>
                       <button id="analytics-tab-export"
-                              onclick="switchAnalyticsTab('export')"
+                              data-action="switch-analytics-tab" data-arg="export"
                               class="analytics-tab flex-1 sm:flex-none py-2 px-5 rounded-lg text-sm font-medium transition-colors text-slate-500 hover:text-slate-700">
                         <i class="fas fa-download mr-2"></i>Export
                       </button>
@@ -2161,17 +2257,6 @@
                       <div id="analytics-daily-container" class="relative" style="height:320px; min-height:260px;">
                         <canvas id="analytics-daily-chart" style="display:block;width:100%!important;height:100%!important;"></canvas>
                       </div>
-                      <script>
-                        (function(){
-                          function setChartH(){
-                            var el=document.getElementById('analytics-daily-container');
-                            if(!el)return;
-                            el.style.height = window.innerWidth < 640 ? '240px' : '340px';
-                          }
-                          setChartH();
-                          window.addEventListener('resize', setChartH);
-                        })();
-                      </script>
                     </div>
 
                     <!-- Revenue by Network Donut (1/3 width on desktop) -->
@@ -2266,7 +2351,7 @@
                         </div>
 
                         <button id="export-csv-btn"
-                                onclick="exportCSV()"
+                                data-action="export-csv"
                                 class="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2">
                           <i class="fas fa-download"></i>
                           <span id="export-csv-btn-text">Download CSV</span>
@@ -2307,7 +2392,7 @@
                         </div>
 
                         <button id="export-pdf-btn"
-                                onclick="exportPDF()"
+                                data-action="export-pdf"
                                 class="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-xl text-sm transition-colors flex items-center justify-center gap-2">
                           <i class="fas fa-download"></i>
                           <span id="export-pdf-btn-text">Download PDF</span>
@@ -2492,10 +2577,10 @@
                                 <option value="MEDIUM">MEDIUM</option>
                                 <option value="LOW">LOW</option>
                             </select>
-                            <button onclick="loadSecurityLogs()" class="flex items-center gap-1.5 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 transition-colors">
+                            <button data-action="load-security-logs" class="flex items-center gap-1.5 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 transition-colors">
                                 <i class="fas fa-sync-alt text-xs"></i> Refresh
                             </button>
-                            <button id="sec-clear-btn" onclick="clearSecurityLogs()" class="hidden flex items-center gap-1.5 px-3 py-2 text-sm bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 text-red-700 transition-colors">
+                            <button id="sec-clear-btn" data-action="clear-security-logs" class="hidden flex items-center gap-1.5 px-3 py-2 text-sm bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 text-red-700 transition-colors">
                                 <i class="fas fa-trash-alt text-xs"></i> Clear Security Events
                             </button>
                         </div>
@@ -2532,8 +2617,8 @@
                         <div class="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50">
                             <p class="text-xs text-slate-500" id="sec-pagination-info">—</p>
                             <div class="flex gap-2">
-                                <button id="sec-prev-btn" onclick="secLogsChangePage(-1)" disabled class="px-3 py-1 text-xs border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">&#8592; Prev</button>
-                                <button id="sec-next-btn" onclick="secLogsChangePage(1)" disabled class="px-3 py-1 text-xs border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Next &#8594;</button>
+                                <button id="sec-prev-btn" data-action="sec-logs-prev" disabled class="px-3 py-1 text-xs border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">&#8592; Prev</button>
+                                <button id="sec-next-btn" data-action="sec-logs-next" disabled class="px-3 py-1 text-xs border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Next &#8594;</button>
                             </div>
                         </div>
                     </div>
@@ -2558,10 +2643,10 @@
                                 <option value="MEDIUM">MEDIUM</option>
                                 <option value="LOW">LOW</option>
                             </select>
-                            <button onclick="loadSecurityLogs()" class="flex items-center gap-1.5 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 transition-colors">
+                            <button data-action="load-security-logs" class="flex items-center gap-1.5 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 transition-colors">
                                 <i class="fas fa-sync-alt text-xs"></i> Refresh
                             </button>
-                            <button id="sec-clear-btn" onclick="clearSecurityLogs()" class="hidden flex items-center gap-1.5 px-3 py-2 text-sm bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 text-red-700 transition-colors">
+                            <button id="sec-clear-btn" data-action="clear-security-logs" class="hidden flex items-center gap-1.5 px-3 py-2 text-sm bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 text-red-700 transition-colors">
                                 <i class="fas fa-trash-alt text-xs"></i> Clear Security Events
                             </button>
                         </div>
@@ -2622,11 +2707,11 @@
                         <div class="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50">
                             <p class="text-xs text-slate-500" id="sec-pagination-info">—</p>
                             <div class="flex gap-2">
-                                <button id="sec-prev-btn" onclick="secLogsChangePage(-1)" disabled
+                                <button id="sec-prev-btn" data-action="sec-logs-prev" disabled
                                     class="px-3 py-1 text-xs border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                                     ← Prev
                                 </button>
-                                <button id="sec-next-btn" onclick="secLogsChangePage(1)" disabled
+                                <button id="sec-next-btn" data-action="sec-logs-next" disabled
                                     class="px-3 py-1 text-xs border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                                     Next →
                                 </button>
@@ -2728,7 +2813,19 @@
                     </div>
                     <p id="status-update-hint" class="text-xs text-slate-500 mt-2">Guest orders will be notified via email if provided</p>
                 </div>
-                
+
+                <div id="refund-order-block" class="hidden bg-amber-50 border border-amber-300 rounded-lg p-4">
+                    <h4 class="font-semibold text-amber-800 mb-2">Refund Customer</h4>
+                    <p class="text-xs text-amber-700 mb-3">
+                        This order failed to deliver. The wallet was already debited when the order was
+                        placed — this credits <span id="refund-order-amount" class="font-semibold"></span>
+                        back to the customer and marks the order as refunded.
+                    </p>
+                    <button id="refund-order-btn" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors">
+                        Refund Customer
+                    </button>
+                </div>
+
                 <div class="flex space-x-3 pt-4 border-t border-slate-200">
                   
                     <button id="close-order-modal" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium py-3 px-4 rounded-lg transition-colors">
@@ -3039,491 +3136,8 @@
     <div id="toast-container"></div>
 
 <!-- Application Scripts -->
-<!-- script.js inlined below — standalone file deleted for security -->
-<script defer>
-/* ============================================================
- * script.js — Prime Connect Admin Portal
- * ============================================================ */
-
-/* ── Fallback Navigation ─────────────────────────────────────── */
-  window.admin = window.admin || {
-    navigateTo: function(page) {
-      console.log('Fallback navigation to:', page);
-      // Basic navigation fallback
-        const pages = ['dashboard', 'all-orders', 'guest-orders', 'user-orders', 'store-sales', 'pending-deposits', 'users', 'bundles', 'custom-pricing', 'settings', 'send-sms', 'new-resellers'];      if (pages.includes(page)) {
-        // Hide all pages
-        document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
-        // Show selected page
-        const pageEl = document.getElementById(page + '-page');
-        if (pageEl) pageEl.classList.remove('hidden');
-        // Update page titles
-        const titles = {
-          dashboard: 'Admin Dashboard',
-          'all-orders': 'All Orders',
-          'guest-orders': 'Guest Orders',
-          'pending-deposits': 'Pending Deposits',
-          users: 'User Management',
-          bundles: 'Bundle Management',
-          settings: 'System Settings',
-          'send-sms': 'Send SMS'
-        };
-        const mobileTitle = document.getElementById('mobile-page-title');
-        const desktopTitle = document.getElementById('desktop-page-title');
-        if (mobileTitle) mobileTitle.textContent = titles[page] || '';
-        if (desktopTitle) desktopTitle.textContent = titles[page] || '';
-        
-        // Load SMS balance
-        if (page === 'send-sms') {
-          checkSMSBalance();
-        }
-      }
-    }
-  };
-
-/* ── SMS & Deposit Tab Functions ────────────────────────────── */
-// Supabase project URL 
-const _SUPABASE_FUNCTIONS_URL = (window._supabaseProjectUrl || 'https://rpolemxgussziexdmdxe.supabase.co') + '/functions/v1';
-
-// ─── Helper: authenticated POST to send-sms via admin-proxy ────────────────
-// v4: Zero-credential architecture.
-// The browser holds no token. We route through admin-proxy which validates the
-// HttpOnly session cookie server-side and injects the bearer token itself.
-// We wait for adminFetch to be registered by the module script (same approach
-// as before, just waiting for adminFetch instead of _getAdminToken).
-async function _smsPost(body) {
-  // Wait for the module script to register adminFetch (up to 10s)
-  let attempts = 0;
-  while (!window._adminFetchReady && attempts++ < 100) {
-    await new Promise(r => setTimeout(r, 100));
-  }
-  if (!window._adminFetchReady) {
-    console.warn('_smsPost: adminFetch not available, aborting request');
-    return { success: false, message: 'Not authenticated. Please sign in.' };
-  }
-  const _SUPABASE_ANON_KEY = window._supabaseAnon || '';
-  const _SUPABASE_PROJECT_URL = window._supabaseProjectUrl || 'https://rpolemxgussziexdmdxe.supabase.co';
-  // Include x-session-id fallback so the proxy can find the session in local
-  // dev (HTTP) where the HttpOnly cookie is blocked by the browser.
-  const _sessionHeaders = (typeof window._getSessionHeaders === 'function')
-    ? window._getSessionHeaders() : {};
-  const response = await fetch(`${_SUPABASE_PROJECT_URL}/functions/v1/admin-proxy`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': _SUPABASE_ANON_KEY,
-      'x-target-function': 'send-sms',
-      ..._sessionHeaders,
-    },
-    body: JSON.stringify(body),
-  });
-  return response.json();
-}
-
-// ─── Check SMS Balance ─────────────────────────────────────────────────────
-async function checkSMSBalance() {
-  const balanceEl = document.getElementById('sms-balance');
-  if (!balanceEl) return;
-  try {
-    balanceEl.textContent = 'Loading...';
-    const result = await _smsPost({ action: 'balance' });
-    if (result.success && result.balance !== undefined) {
-      balanceEl.textContent = result.balance;
-    } else {
-      balanceEl.textContent = 'Error';
-      showToast(result.message || 'Failed to check balance', 'error');
-    }
-  } catch (error) {
-    console.error('Error checking SMS balance:', error);
-    balanceEl.textContent = '--';
-  }
-}
-
-// ─── Tab switching ─────────────────────────────────────────────────────────
-function switchSMSTab(tab) {
-  ['compose', 'logs'].forEach(t => {
-    const btn   = document.getElementById(`sms-tab-${t}`);
-    const panel = document.getElementById(`sms-panel-${t}`);
-    const active = t === tab;
-    btn.classList.toggle('bg-white',    active);
-    btn.classList.toggle('text-slate-800', active);
-    btn.classList.toggle('shadow',      active);
-    btn.classList.toggle('text-slate-500', !active);
-    panel.classList.toggle('hidden', !active);
-  });
-  if (tab === 'logs') loadSMSLogs();
-}
-
-// ─── Target audience selector UI ──────────────────────────────────────────
-function updateSMSTargetUI() {
-  const target = document.querySelector('input[name="sms-target"]:checked')?.value || 'all';
-  const opts = ['network', 'activity', 'balance', 'manual'];
-  opts.forEach(o => {
-    const el = document.getElementById(`sms-opt-${o}`);
-    if (el) el.classList.toggle('hidden', o !== target);
-  });
-
-  const preview = document.getElementById('sms-recipient-preview');
-  const listEl  = document.getElementById('sms-recipient-list');
-  if (preview) {
-    preview.classList.toggle('hidden', target === 'manual');
-    if (target !== 'manual') {
-      document.getElementById('sms-recipient-count').textContent = '—';
-      if (listEl) listEl.innerHTML = '<div class="py-5 text-center text-slate-400 text-xs"><i class="fas fa-spinner fa-spin block mb-1"></i>Loading...</div>';
-      previewSMSRecipients();
-    }
-  }
-
-  if (target === 'manual') updatePhoneCount();
-}
-
-// ─── Preview recipient count ───────────────────────────────────────────────
-async function previewSMSRecipients() {
-  const countEl = document.getElementById('sms-recipient-count');
-  const listEl  = document.getElementById('sms-recipient-list');
-  if (!countEl || !listEl) return;
-
-  countEl.textContent = 'loading...';
-  listEl.innerHTML = '<div class="py-5 text-center text-slate-400 text-xs"><i class="fas fa-spinner fa-spin block mb-1"></i>Loading recipients...</div>';
-
-  try {
-    const target = buildSMSTarget();
-    const result = await _smsPost({ action: 'preview', target });
-
-    if (!result.success) {
-      countEl.textContent = 'Error';
-      listEl.innerHTML = `<div class="py-4 text-center text-red-400 text-xs">${esc(result.message) || 'Failed to load'}</div>`;
-      return;
-    }
-
-    const users = result.users || [];
-    countEl.textContent = result.count;
-
-    if (users.length === 0) {
-      listEl.innerHTML = '<div class="py-6 text-center text-slate-400 text-xs"><i class="fas fa-user-slash block mb-1 opacity-40"></i>No users match this filter</div>';
-      return;
-    }
-
-    const networkColors = {
-      mtn:       'bg-yellow-100 text-yellow-700',
-      airteltigo:'bg-red-100 text-red-700',
-      telecel:   'bg-blue-100 text-blue-700',
-    };
-
-    listEl.innerHTML = users.map(u => {
-      const name    = u.fullname || u.email || u.phone;
-      const sub     = u.fullname ? (u.email || u.phone) : u.phone;
-      const bal = u.balance !== null && u.balance !== undefined
-        ? `<span class="text-xs text-slate-500">GH₵ ${parseFloat(u.balance).toFixed(2)}</span>`
-        : '';
-
-      return `
-        <div class="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors">
-          <div class="flex items-center gap-2.5 min-w-0">
-            <div class="w-7 h-7 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center flex-shrink-0 text-xs font-bold">
-              ${esc((u.fullname || u.email || '?')[0].toUpperCase())}
-            </div>
-            <div class="min-w-0">
-              <p class="text-sm font-medium text-slate-800 truncate">${esc(name)}</p>
-              <p class="text-xs text-slate-400 truncate">${sub !== name ? esc(sub) : ''}</p>
-            </div>
-          </div>
-          <div class="flex items-center gap-2 flex-shrink-0 ml-2">
-            ${bal}
-          </div>
-        </div>`;
-    }).join('');
-
-    if (result.count > users.length) {
-      listEl.innerHTML += `
-        <div class="px-4 py-2 bg-slate-50 text-xs text-slate-500 text-center border-t border-slate-100">
-          Showing ${users.length} of ${result.count} recipients
-        </div>`;
-    }
-
-  } catch (err) {
-    console.error('Preview error:', err);
-    countEl.textContent = '?';
-    listEl.innerHTML = '<div class="py-4 text-center text-red-400 text-xs">Failed to load recipients</div>';
-  }
-}
-
-// ─── Build target object from current form state ──────────────────────────
-function buildSMSTarget() {
-  const type = document.querySelector('input[name="sms-target"]:checked')?.value || 'all';
-  const target = { type };
-
-  if (type === 'network') {
-    target.network = document.querySelector('input[name="sms-network"]:checked')?.value || 'mtn';
-  }
-  if (type === 'activity') {
-    target.activityDays = parseInt(document.querySelector('input[name="sms-activity-days"]:checked')?.value || '30', 10);
-  }
-  if (type === 'balance') {
-    const minVal = document.getElementById('sms-balance-min')?.value;
-    const maxVal = document.getElementById('sms-balance-max')?.value;
-    if (minVal) target.balanceMin = parseFloat(minVal);
-    if (maxVal) target.balanceMax = parseFloat(maxVal);
-  }
-  if (type === 'manual') {
-    const phonesText = document.getElementById('multiple-phones')?.value || '';
-    target.manualNumbers = phonesText.split('\n').map(p => p.trim()).filter(Boolean);
-  }
-  return target;
-}
-
-// ─── Format phone number ──────────
-function formatPhoneNumber(phone) {
-  phone = phone.replace(/\D/g, '');
-  if (phone.startsWith('0')) phone = '233' + phone.substring(1);
-  if (!phone.startsWith('233')) phone = '233' + phone;
-  return phone;
-}
-
-// ─── Update phone count (manual mode) ─────────────────────────────────────
-function updatePhoneCount() {
-  const textarea = document.getElementById('multiple-phones');
-  if (!textarea) return;
-  const phones = textarea.value.split('\n').filter(p => p.trim().length > 0);
-  const el = document.getElementById('phone-count');
-  if (el) el.textContent = phones.length;
-}
-
-// ─── SMS Templates ─────────────────────────────────────────────────────────
-function useSMSTemplate(type) {
-  const templates = {
-    maintenance: 'Dear customer, Prime Connect will undergo scheduled maintenance today. Services may be temporarily unavailable. Thank you for your patience.',
-    promo:       'Special offer! Get 20% bonus on all data bundles today only at Prime Connect. Visit our app to purchase now!',
-    update:      'Important update from Prime Connect: We have improved our service delivery. Enjoy faster data bundles. Thank you!',
-    reminder:    'Reminder: Your wallet balance is running low. Top up now to enjoy uninterrupted service at Prime Connect.',
-    lowbalance:  'Hi! Your Prime Connect wallet balance is below GH₵5. Recharge now to keep your data bundles flowing. Thank you!'
-  };
-  const msgEl = document.getElementById('sms-message');
-  if (msgEl) { msgEl.value = templates[type] || ''; updateSMSPreview(); }
-}
-
-// ─── Update preview & char count ──────────────────────────────────────────
-function updateSMSPreview() {
-  const message = document.getElementById('sms-message')?.value || '';
-  const previewEl = document.getElementById('sms-preview-text');
-  const countEl   = document.getElementById('char-count');
-  if (previewEl) previewEl.textContent = message || 'Your message will appear here...';
-  if (countEl) {
-    countEl.textContent = `${message.length}/160`;
-    countEl.classList.toggle('text-red-600', message.length > 160);
-    countEl.classList.toggle('text-slate-600', message.length <= 160);
-  }
-}
-
-// ─── Handle SMS Form Submit ────────────────────────────────────────────────
-async function handleSMSFormSubmit(e) {
-  e.preventDefault();
-
-  const message = document.getElementById('sms-message')?.value.trim() || '';
-  if (!message) { showToast('Please enter a message', 'warning'); return; }
-  if (message.length > 160) { showToast('Message too long. Maximum 160 characters', 'warning'); return; }
-
-  const target = buildSMSTarget();
-
-  // For manual, validate at least one number entered
-  if (target.type === 'manual' && (!target.manualNumbers || target.manualNumbers.length === 0)) {
-    showToast('Please enter at least one phone number', 'warning');
-    return;
-  }
-
-  // Preview count before confirming for audience targets
-  let recipientLabel = '';
-  if (target.type === 'all')      recipientLabel = 'ALL registered users';
-  else if (target.type === 'network')  recipientLabel = `all ${(target.network || '').toUpperCase()} users`;
-  else if (target.type === 'activity') recipientLabel = `users active in the last ${target.activityDays} days`;
-  else if (target.type === 'balance')  recipientLabel = `users with wallet balance in range`;
-  else recipientLabel = `${target.manualNumbers.length} phone number(s)`;
-
-  if (!confirm(`Send SMS to ${recipientLabel}?\n\nMessage:\n"${message}"\n\nThis cannot be undone.`)) return;
-
-  const submitBtn = e.target.querySelector('button[type="submit"]');
-  const origHTML  = submitBtn.innerHTML;
-  submitBtn.disabled = true;
-  submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Sending...';
-
-  try {
-    const result = await _smsPost({ action: 'send', target, message });
-
-    if (result.success) {
-      const count = result.recipientCount || target.manualNumbers?.length || '?';
-      showToast(`✅ SMS sent successfully to ${count} recipient(s)!`, 'success');
-      // Clear message + manual phones
-      const msgEl = document.getElementById('sms-message');
-      const phEl  = document.getElementById('multiple-phones');
-      if (msgEl) msgEl.value = '';
-      if (phEl)  phEl.value  = '';
-      updateSMSPreview();
-      updatePhoneCount();
-      document.getElementById('sms-recipient-count').textContent = '—';
-      checkSMSBalance();
-    } else {
-      showToast('Failed to send SMS: ' + (result.message || 'Unknown error'), 'error');
-    }
-  } catch (error) {
-    console.error('SMS send error:', error);
-    showToast('Failed to send SMS. Please try again.', 'error');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = origHTML;
-  }
-}
-
-// ─── Load SMS Logs ─────────────────────────────────────────────────────────
-async function loadSMSLogs() {
-  const container = document.getElementById('sms-logs-container');
-  if (!container) return;
-  container.innerHTML = '<div class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i><p class="text-sm">Loading logs...</p></div>';
-
-  try {
-    const result = await _smsPost({ action: 'logs' });
-    if (!result.success) throw new Error(result.message);
-
-    const logs = result.logs || [];
-    if (logs.length === 0) {
-      container.innerHTML = '<div class="text-center py-10 text-slate-400"><i class="fas fa-inbox text-3xl mb-3 opacity-30 block"></i><p class="text-sm">No SMS sends recorded yet</p></div>';
-      return;
-    }
-
-    container.innerHTML = `
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-slate-100">
-              <th class="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Date</th>
-              <th class="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Sent By</th>
-              <th class="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Target</th>
-              <th class="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Recipients</th>
-              <th class="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Message</th>
-              <th class="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-50">
-            ${logs.map(log => {
-              const date    = new Date(log.created_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
-              const sender  = log.sender_name || log.sent_by?.slice(0,8) + '...';
-              const target  = _smsTargetLabel(log.target_type);
-              const count   = log.recipient_count ?? (Array.isArray(log.recipients) ? log.recipients.length : '?');
-              const msg     = log.message?.length > 60 ? log.message.slice(0, 60) + '…' : (log.message || '—');
-              const ok      = log.success;
-              return `
-                <tr class="hover:bg-slate-50 transition-colors">
-                  <td class="px-3 py-3 text-slate-500 whitespace-nowrap text-xs">${esc(date)}</td>
-                  <td class="px-3 py-3 text-slate-700 font-medium max-w-[120px] truncate" title="${esc(sender)}">${esc(sender)}</td>
-                  <td class="px-3 py-3">
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${_smsTargetBadgeClass(log.target_type)}">
-                      ${esc(target)}
-                    </span>
-                  </td>
-                  <td class="px-3 py-3 text-center font-semibold text-slate-700">${esc(String(count))}</td>
-                  <td class="px-3 py-3 text-slate-600 max-w-[200px] truncate text-xs" title="${esc(log.message || '')}">${esc(msg)}</td>
-                  <td class="px-3 py-3">
-                    ${ok
-                      ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700"><i class="fas fa-check-circle"></i> Sent</span>'
-                      : '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700"><i class="fas fa-times-circle"></i> Failed</span>'}
-                  </td>
-                </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>`;
-  } catch (err) {
-    console.error('SMS logs error:', err);
-    container.innerHTML = `<div class="text-center py-8 text-red-400"><i class="fas fa-exclamation-circle text-2xl mb-2 block"></i><p class="text-sm">Failed to load logs: ${esc(err.message)}</p></div>`;
-  }
-}
-
-function _smsTargetLabel(type) {
-  return { all: 'All Users', network: 'By Network', activity: 'By Activity', balance: 'By Balance', manual: 'Manual' }[type] || type || '—';
-}
-function _smsTargetBadgeClass(type) {
-  return {
-    all:      'bg-brand-100 text-brand-700',
-    network:  'bg-purple-100 text-purple-700',
-    activity: 'bg-green-100 text-green-700',
-    balance:  'bg-amber-100 text-amber-700',
-    manual:   'bg-slate-100 text-slate-600',
-  }[type] || 'bg-slate-100 text-slate-600';
-}
-
-// ─── Show Toast (kept here for SMS script; main app may have its own) ──────
-function showToast(message, type = 'success') {
-  const toast = document.createElement('div');
-  const colors = {
-    success: 'bg-green-50 text-green-800 border-green-200',
-    error:   'bg-red-50 text-red-800 border-red-200',
-    info:    'bg-blue-50 text-blue-800 border-blue-200',
-    warning: 'bg-yellow-50 text-yellow-800 border-yellow-200'
-  };
-  toast.className = `toast ${colors[type] || colors.info} border rounded-lg p-4 shadow-lg`;
-  toast.innerHTML = `
-    <div class="flex items-center gap-3">
-      <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-      <span class="font-medium">${esc(message)}</span>
-    </div>`;
-  const container = document.getElementById('toast-container');
-  if (!container) { alert(message); return; }
-  container.appendChild(toast);
-  setTimeout(() => toast.classList.add('show'), 10);
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
-}
-
-// ─── Wire up all SMS page event listeners ─────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
-
-  // Form submit
-  const smsForm = document.getElementById('sms-form');
-  if (smsForm) smsForm.addEventListener('submit', handleSMSFormSubmit);
-
-  // Message character counter + preview
-  const smsMessage = document.getElementById('sms-message');
-  if (smsMessage) smsMessage.addEventListener('input', updateSMSPreview);
-
-  // Manual phones counter
-  const multiplePhones = document.getElementById('multiple-phones');
-  if (multiplePhones) multiplePhones.addEventListener('input', updatePhoneCount);
-
-  // Target audience radio buttons
-  document.querySelectorAll('input[name="sms-target"]').forEach(radio => {
-    radio.addEventListener('change', updateSMSTargetUI);
-  });
-
-  // Network sub-option change → re-preview
-  document.querySelectorAll('input[name="sms-network"], input[name="sms-activity-days"]').forEach(r => {
-    r.addEventListener('change', () => {
-      const target = document.querySelector('input[name="sms-target"]:checked')?.value;
-      if (target !== 'manual') previewSMSRecipients();
-    });
-  });
-
-  // Balance range inputs → re-preview on blur
-  ['sms-balance-min', 'sms-balance-max'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('change', previewSMSRecipients);
-  });
-
-  // Initial UI state — defer the auto-preview until BOTH:
-  //   a) adminFetch is ready (module script loaded)
-  //   b) admin session is established (_adminSessionReady flag)
-  // Without waiting for the session, the SMS preview fires before login
-  // completes and hits a 401 — harmless but noisy in the console.
-  function deferredUpdateSMSTargetUI() {
-    if (window._adminFetchReady && window._adminSessionReady) {
-      updateSMSTargetUI();
-    } else {
-      setTimeout(deferredUpdateSMSTargetUI, 200);
-    }
-  }
-  deferredUpdateSMSTargetUI();
-});
-</script>
+<!-- zprx-inline.js: extracted from an inline <script> block for CSP hardening (2026-08) — same code, external file now -->
+<script src="zprx-inline.js" defer></script>
 <script type="module" src="zprx.js"></script>
 
 </body>

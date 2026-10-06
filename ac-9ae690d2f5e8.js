@@ -178,6 +178,25 @@ export async function adminVerifyOTP(pendingId, otpCode, fingerprint = '') {
   return data;
 }
 
+// ── adminAuthAction ───────────────────────────────────────────────────────────
+// Generic helper for admin-auth actions that don't fit the login/OTP/logout
+// shape above — currently used for trusted-device management
+// (list-trusted-devices, revoke-trusted-device, revoke-all-trusted-devices).
+// Uses the same cookie-based session auth as every other admin-auth call.
+export async function adminAuthAction(action, body = {}) {
+  const res = await fetch(AUTH_PROXY_URL, {
+    method:      'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey':       SUPABASE_ANON_KEY,
+      ...sessionHeaders(),
+    },
+    body: JSON.stringify({ action, ...body }),
+  });
+  return res.json();
+}
+
 // ── adminLogout ───────────────────────────────────────────────────────────────
 // Calls admin-auth logout action which:
 //   1. Reads session_id from HttpOnly cookie

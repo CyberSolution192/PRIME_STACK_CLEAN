@@ -1,4 +1,4 @@
- /* ── CSS custom properties — overridden by JS from store settings ── */
+/* ── CSS custom properties — overridden by JS from store settings ── */
         :root {
             --tc: #0284c7;       /* theme color */
             --tc-dark: #0369a1;  /* slightly darker */
@@ -135,4 +135,46 @@
 
 .store-banner-gradient {
     background: linear-gradient(135deg, var(--tc) 0%, var(--tc-dark) 100%);
+}
+
+/* ── Announcement Ticker (same as dashboard) ─────────────────────────── */
+#announcementTicker {
+    background: linear-gradient(90deg, #0369a1 0%, #0284c7 50%, #0369a1 100%);
+    background-size: 200% 100%;
+    animation: tickerShimmer 4s linear infinite;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 0;
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
+    z-index: 29;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+@keyframes tickerShimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+.ticker-track {
+    display: inline-flex;
+    animation: tickerScroll 120s linear infinite;
+    will-change: transform;
+}
+.ticker-track:hover { animation-play-state: paused; }
+@keyframes tickerScroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+.ticker-item {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 48px;
+    gap: 10px;
+}
+.ticker-dot {
+    width: 6px; height: 6px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 50%;
+    flex-shrink: 0;
 }

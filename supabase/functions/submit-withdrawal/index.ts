@@ -8,6 +8,7 @@
 // ============================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { rejectUnsafeChars } from '../_shared/input-sanitize.ts';
 
 // ── PBKDF2 PIN verification (unchanged) ───────────────────────────────────────
 const PBKDF2_ITERATIONS = 310_000;
@@ -92,6 +93,8 @@ Deno.serve(async (req) => {
     return json({ success: false, message: 'Invalid network' }, 400);
   if (!recipient_name || typeof recipient_name !== 'string' || recipient_name.trim().length < 2)
     return json({ success: false, message: 'Enter the name on your mobile money account' }, 400);
+  const nameError = rejectUnsafeChars(recipient_name, 'Recipient name');
+  if (nameError) return json({ success: false, message: nameError }, 400);
 
   try {
     const { data: profile, error: profileErr } = await supabase
@@ -106,7 +109,19 @@ Deno.serve(async (req) => {
       return json({ success: false, message: 'Store not unlocked. Withdrawal not available.' }, 403);
 
     // ── PIN verification ───────────────────────────────────────────────────
-    if (profile.transaction_pin_hash) {
+    // Mandatory gate: a PIN MUST exist before any withdrawal is allowed.
+    // Previously, if transaction_pin_hash was null this whole block was
+    // skipped entirely — meaning any account that had never set a PIN could
+    // withdraw with zero PIN protection. Closed that gap here.
+    if (!profile.transaction_pin_hash) {
+      return json({
+        success: false,
+        message: 'You must set up a transaction PIN before you can withdraw.',
+        pin_setup_required: true,
+      }, 403);
+    }
+
+    {
       if (!pin)
         return json({ success: false, message: 'Transaction PIN required', pin_required: true }, 400);
 
@@ -117,13 +132,13 @@ Deno.serve(async (req) => {
 
       const pinValid = await verifyPinHash(String(pin), profile.transaction_pin_hash);
       if (!pinValid) {
-        const newAttempts = (profile.pin_failed_attempts ?? 0) + 1;
-        const updateData: Record<string, unknown> = { pin_failed_attempts: newAttempts };
-        if (newAttempts >= 5) {
-          updateData.pin_locked_until    = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-          updateData.pin_failed_attempts = 0;
-        }
-        await supabase.from('users').update(updateData).eq('id', user.id);
+        // Atomic increment via RPC — closes the race condition where firing
+        // concurrent guesses caused lost updates and let the 5-attempt
+        // lockout be bypassed under concurrency.
+        const { data: failResult } = await supabase
+          .rpc('register_pin_failure', { p_user_id: user.id, p_max_attempts: 5, p_lockout_min: 30 })
+          .single();
+        const newAttempts = failResult?.new_attempts ?? 5;
         const remaining = 5 - newAttempts;
         return json({
           success: false,
@@ -266,6 +281,15 @@ Deno.serve(async (req) => {
 
     // ── Insert withdrawal request ──────────────────────────────────────────
     // FIX (2026-05): user_note removed from insert (column deleted from DB)
+    //
+    // NOTE: the "duplicate pending guard" check above is a best-effort check,
+    // not a real guarantee — two concurrent requests can both pass it before
+    // either has inserted (a classic check-then-act race). The actual
+    // guarantee comes from a unique partial index on
+    // (user_id) WHERE status = 'pending', enforced atomically by Postgres
+    // regardless of timing. If a race does occur, this insert fails with a
+    // unique_violation (23505) here, which we catch and turn into the same
+    // friendly message instead of a raw 500.
     const { error: insertError } = await supabase.from('withdrawal_requests').insert({
       user_id:           user.id,
       amount,
@@ -277,7 +301,15 @@ Deno.serve(async (req) => {
       status:            'pending',
     });
 
-    if (insertError) throw insertError;
+    if (insertError) {
+      if (insertError.code === '23505') {
+        return json({
+          success: false,
+          message: 'You already have a pending withdrawal. Please wait for it to be processed.',
+        }, 409);
+      }
+      throw insertError;
+    }
 
     // ── Upsert velocity tracking ───────────────────────────────────────────
     await supabase.from('withdrawal_daily_totals').upsert({

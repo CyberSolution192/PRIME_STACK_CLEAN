@@ -184,3 +184,26 @@ window.supabaseAuth   = {
   isAuthenticated: async () => !!(await tryRestoreUserSession()),
   signOut:         userLogout,
 };
+
+/**
+ * escapeHtml — HTML-escapes a string before it's interpolated into innerHTML.
+ *
+ * Closes a reflected-XSS gap found on login.html and signup.html: both read
+ * a `message`/`error` value straight from the URL query string and passed it
+ * unescaped into innerHTML, so a crafted link like
+ * primeconnect.site/login.html?message=<img src=x onerror=alert(1)> would
+ * execute in any victim's browser who clicked it — no signup or stored data
+ * needed, unlike the profile-field XSS fixed earlier. Same fix shape as the
+ * esc() helper already used correctly in the admin panel: escape at the
+ * render sink so every caller (current and future) is covered, not just the
+ * URL-reading lines that happened to be the ones tested.
+ */
+export function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}

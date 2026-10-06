@@ -52,7 +52,7 @@ function json(body: unknown, status = 200) {
 const RATE_LIMIT = 30; // requests per minute
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Provider = "justicedata" | "pensite" | "hubnet" | "sparkdata" | "databosshub" | "up2u";
+type Provider = "justicedata" | "pensite" | "hubnet" | "sparkdata" | "databosshub" | "up2u" | "bundlezonegh";
 
 interface ProviderResult {
   success: boolean;
@@ -119,6 +119,15 @@ function mapUp2u(network: string): string {
   if (network === "mtn")        return "mtn";
   if (network === "telecel")    return "telecel";
   if (network === "airteltigo") return "airteltigo";
+  return network.toLowerCase();
+}
+
+// Bundle Zone GH's documented network keys are "mtn", "telecel", "ishare" —
+// airteltigo maps to "ishare", NOT "airteltigo".
+function mapBundleZoneGh(network: string): string {
+  if (network === "mtn")        return "mtn";
+  if (network === "telecel")    return "telecel";
+  if (network === "airteltigo") return "ishare";
   return network.toLowerCase();
 }
 
@@ -315,6 +324,49 @@ async function placeUp2uOrder(payload: OrderPayload): Promise<ProviderResult> {
   }
 }
 
+async function placeBundleZoneGhOrder(payload: OrderPayload): Promise<ProviderResult> {
+  const apiKey = Deno.env.get("BUNDLEZONEGH_API_KEY");
+  if (!apiKey) return { success: false, error: "Bundle Zone GH API key not configured" };
+
+  const networkKey = mapBundleZoneGh(payload.network);
+  // Bundle Zone GH's package_size is documented in GB directly — no MB conversion.
+
+  try {
+    const res = await fetch("https://shisywgbcadfyfbcupve.supabase.co/functions/v1/developer-api", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action:       "place_order",
+        network:      networkKey,
+        recipient:    payload.phone,
+        package_size: payload.bundleSize,
+        order_id:     payload.orderId,
+      }),
+    });
+
+    let data: any = {};
+    try { data = await res.json(); } catch { /* non-JSON body, data stays {} */ }
+
+    if (!res.ok || data.success !== true) {
+      const errMsg = data.message || data.error || `HTTP ${res.status}`;
+      return { success: false, error: `BundleZoneGH error: ${errMsg}` };
+    }
+
+    return {
+      success: true,
+      data: {
+        ...data.data,
+        message:                 data.message || "Order placed successfully",
+        _provider:               "bundlezonegh",
+        _network_key:            networkKey,
+        _bundlezonegh_reference: data.data?.reference,
+      },
+    };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "BundleZoneGH unknown error" };
+  }
+}
+
 // ── Active provider dispatcher (reads system_settings) ────────────────────────
 async function placeOrder(
   supabase: any,
@@ -337,6 +389,7 @@ async function placeOrder(
     case "sparkdata":   result = await placeSparkDataOrder(payload);   break;
     case "databosshub": result = await placeDataBossHubOrder(payload); break;
     case "up2u":        result = await placeUp2uOrder(payload);      break;
+    case "bundlezonegh": result = await placeBundleZoneGhOrder(payload); break;
     case "justicedata":
     default:            result = await placeJusticeDataOrder(payload); break;
   }
@@ -492,6 +545,31 @@ Deno.serve(async (req: Request) => {
   const activeProvider = orderResult.provider;
   const description    = `${networkRaw.toUpperCase()} ${bundleSize}GB Data Purchase (API)`;
 
+  // ── Real provider cost lookup ────────────────────────────────────────────
+  // `basePrice` is bundles.price — your selling price, not what any provider
+  // actually charges. Real wholesale cost (kept fresh by sync-bundle-costs)
+  // lives in provider_bundle_costs, keyed by provider — look it up now that
+  // we know which provider filled this order.
+  let providerCost: number | null = null;
+  try {
+    const { data: costRow } = await supabase
+      .from("provider_bundle_costs")
+      .select("cost_price")
+      .eq("provider", activeProvider)
+      .eq("network", networkRaw.toLowerCase())
+      .eq("size_gb", bundleSize)
+      .eq("validity", "monthly")
+      .maybeSingle();
+    if (costRow) providerCost = parseFloat(String(costRow.cost_price));
+  } catch (e) {
+    console.warn("provider_bundle_costs lookup failed:", e instanceof Error ? e.message : e);
+  }
+  const costSource = providerCost !== null ? "provider_synced" : "estimated_fallback";
+  if (costSource === "estimated_fallback") {
+    console.warn(`[${activeProvider}] No synced cost for ${networkRaw} ${bundleSize}GB — profit is an ESTIMATE using selling price as cost.`);
+  }
+  const effectiveCost = providerCost ?? basePrice;
+
   // Use 'manual_review' when the provider call fails so the order appears
   // correctly flagged across ALL tabs (All Orders, API Orders, Recent Orders)
   // from the moment it is created — matching the behaviour of store, guest,
@@ -522,6 +600,8 @@ Deno.serve(async (req: Request) => {
       provider_response: apiSuccess ? orderResult.data : null,
       provider_error:    !apiSuccess ? orderResult.error : null,
       base_price:        basePrice,
+      provider_cost:     providerCost,
+      cost_source:       costSource,
       final_price:       finalPrice,
       price_source:      priceSource,
       flagged_at:        !apiSuccess ? new Date().toISOString() : null,
@@ -554,8 +634,10 @@ Deno.serve(async (req: Request) => {
       provider_response: apiSuccess ? orderResult.data : null,
       provider_error:    !apiSuccess ? orderResult.error : null,
       base_cost:         basePrice,
+      provider_cost:     providerCost,
+      cost_source:       costSource,
       selling_price:     finalPrice,
-      profit:            parseFloat((finalPrice - basePrice).toFixed(2)),
+      profit:            parseFloat((finalPrice - effectiveCost).toFixed(2)),
       price_source:      priceSource,
       flagged_at:        !apiSuccess ? new Date().toISOString() : null,
     },

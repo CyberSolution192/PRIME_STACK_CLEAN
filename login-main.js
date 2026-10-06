@@ -1,4 +1,4 @@
-import { supabase as supabaseClient, userLogin } from './supabase-config.js';
+import { supabase as supabaseClient, userLogin, escapeHtml } from './supabase-config.js';
         
         // DOM Elements
         const loginForm = document.getElementById('login-form');
@@ -49,7 +49,7 @@ import { supabase as supabaseClient, userLogin } from './supabase-config.js';
             toast.innerHTML = `
                 <div class="flex items-center">
                     <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} mr-3"></i>
-                    <span class="font-medium">${message}</span>
+                    <span class="font-medium">${escapeHtml(message)}</span>
                 </div>
             `;
             
@@ -76,7 +76,7 @@ import { supabase as supabaseClient, userLogin } from './supabase-config.js';
             
             message.innerHTML = `
                 <i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'success' ? 'check-circle' : 'info-circle'} mt-0.5"></i>
-                <span>${text}</span>
+                <span>${escapeHtml(text)}</span>
             `;
             
             messageContainer.appendChild(message);
@@ -296,7 +296,7 @@ import { supabase as supabaseClient, userLogin } from './supabase-config.js';
         function showMsg(el, msg, type) {
             if (!el) return;
             const colors = { success: 'text-green-800 bg-green-50', error: 'text-red-800 bg-red-50' };
-            el.innerHTML = `<div class="${colors[type] || ''} p-3 rounded-lg">${msg}</div>`;
+            el.innerHTML = `<div class="${colors[type] || ''} p-3 rounded-lg">${escapeHtml(msg)}</div>`;
             el.classList.remove('hidden');
         }
                 

@@ -22,17 +22,25 @@ const SUPABASE_URL              = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const PAYSTACK_SECRET_KEY       = (Deno.env.get('PAYSTACK_SECRET_KEY') ?? '').trim();
 
+const IS_PRODUCTION = Deno.env.get("ENVIRONMENT") === "production";
+
 const ALLOWED_ORIGINS = new Set([
   'https://primeconnect.site',
   'http://127.0.0.1:5500',
   'http://127.0.0.1:5501',
+  'http://127.0.0.1:5503',
   'http://localhost:5500',
   'http://localhost:5501',
+  'http://localhost:5503',
 ]);
+
+const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):\d+$/;
 
 function getAllowedOrigin(req: Request): string {
   const origin = req.headers.get('Origin') ?? '';
-  return ALLOWED_ORIGINS.has(origin) ? origin : 'https://no-cors-for-you';
+  if (ALLOWED_ORIGINS.has(origin)) return origin;
+  if (!IS_PRODUCTION && LOCAL_DEV_ORIGIN_RE.test(origin)) return origin;
+  return 'https://no-cors-for-you';
 }
 
 function jsonResponse(body: unknown, status = 200, req?: Request): Response {

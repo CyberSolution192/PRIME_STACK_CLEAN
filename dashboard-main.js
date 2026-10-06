@@ -2928,8 +2928,11 @@ window.submitWithdrawalRequest = async function() {
     return;
   }
 
-  // No PIN set — submit directly (backward compatible for existing resellers)
-  await _doFinalWithdrawal({ amount, phone, network, notes, recipient_name, pin: null });
+  // No PIN set — a PIN is now mandatory before withdrawing (backend enforces
+  // this). Send the reseller to Settings to set one up instead of attempting
+  // a withdrawal that the server will now reject.
+  showToast('Please set up a Transaction PIN before withdrawing.', 'warning');
+  if (typeof navigateTo === 'function') navigateTo('settings');
 };
 
 // Internal — called after PIN is verified (or directly if no PIN set)
@@ -2945,6 +2948,13 @@ window.submitWithdrawalRequest = async function() {
       // Handle specific server responses
       if (result.locked)    { showToast(result.message, 'error'); closePinModal(); return; }
       if (result.cooldown)  { showToast(result.message, 'warning'); closePinModal(); return; }
+      if (result.pin_setup_required) {
+        closePinModal();
+        showToast('Please set up a Transaction PIN before withdrawing.', 'warning');
+        if (state.user) state.user.pin_set = false;
+        if (typeof navigateTo === 'function') navigateTo('settings');
+        return;
+      }
       throw new Error(result.message || 'Withdrawal failed');
     }
 
@@ -3122,6 +3132,110 @@ window.openPinModal    = openPinModal;
 window.closePinModal   = closePinModal;
 window.pinBackspace    = pinBackspace;
 window.submitPinVerify = submitPinVerify;
+
+// ── PIN Reset ("Forgot PIN?") — OTP-based recovery ─────────────────────────────
+// Lets a reseller reset their PIN via SMS OTP without needing the old one.
+// Calls the reset-transaction-pin edge function (request-otp / verify-and-reset).
+
+function openPinResetModal() {
+    // Preserve any pending withdrawal so we can auto-continue it after reset.
+    document.getElementById('pinVerifyModal')?.classList.add('hidden');
+    document.getElementById('pinResetStepRequest')?.classList.remove('hidden');
+    document.getElementById('pinResetStepVerify')?.classList.add('hidden');
+    document.getElementById('pinResetRequestError')?.classList.add('hidden');
+    document.getElementById('pinResetVerifyError')?.classList.add('hidden');
+    document.getElementById('pinResetOtpInput').value = '';
+    document.getElementById('pinResetNewPin').value = '';
+    document.getElementById('pinResetConfirmPin').value = '';
+    document.getElementById('pinResetModal')?.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closePinResetModal() {
+    document.getElementById('pinResetModal')?.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+async function requestPinResetOtp() {
+    const btn = document.getElementById('pinResetRequestBtn');
+    const errEl = document.getElementById('pinResetRequestError');
+    if (errEl) errEl.classList.add('hidden');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending...';
+
+    try {
+        const res = await userFetch('reset-transaction-pin', { action: 'request-otp' });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.message || 'Failed to send code');
+
+        const hint = document.getElementById('pinResetPhoneHint');
+        if (hint && result.phone_hint) hint.textContent = `Enter the 6-digit code sent to ${result.phone_hint}`;
+
+        document.getElementById('pinResetStepRequest')?.classList.add('hidden');
+        document.getElementById('pinResetStepVerify')?.classList.remove('hidden');
+        document.getElementById('pinResetOtpInput')?.focus();
+    } catch (err) {
+        if (errEl) { errEl.textContent = err.message || 'Failed to send code'; errEl.classList.remove('hidden'); }
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Send Code';
+    }
+}
+
+async function submitPinReset() {
+    const otp = document.getElementById('pinResetOtpInput')?.value.trim();
+    const newPin = document.getElementById('pinResetNewPin')?.value.trim();
+    const confirmPin = document.getElementById('pinResetConfirmPin')?.value.trim();
+    const btn = document.getElementById('pinResetVerifyBtn');
+    const errEl = document.getElementById('pinResetVerifyError');
+    if (errEl) errEl.classList.add('hidden');
+
+    if (!otp || otp.length !== 6) {
+        if (errEl) { errEl.textContent = 'Enter the 6-digit code.'; errEl.classList.remove('hidden'); }
+        return;
+    }
+    if (!newPin || !/^\d{4,6}$/.test(newPin)) {
+        if (errEl) { errEl.textContent = 'New PIN must be 4-6 digits.'; errEl.classList.remove('hidden'); }
+        return;
+    }
+    if (newPin !== confirmPin) {
+        if (errEl) { errEl.textContent = 'PINs do not match.'; errEl.classList.remove('hidden'); }
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Resetting...';
+
+    try {
+        const res = await userFetch('reset-transaction-pin', {
+            action: 'verify-and-reset', otp, new_pin: newPin, confirm_pin: confirmPin,
+        });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.message || 'Failed to reset PIN');
+
+        closePinResetModal();
+        if (state.user) state.user.pin_set = true;
+        document.getElementById('pinSetupBanner')?.classList.add('hidden');
+        showToast('✅ PIN reset successfully!', 'success');
+
+        // If a withdrawal was pending when "Forgot PIN?" was clicked, finish it
+        // now with the freshly-set PIN instead of making the user start over.
+        if (_pinModalPendingWithdrawal) {
+            await _doFinalWithdrawal({ ..._pinModalPendingWithdrawal, pin: newPin });
+            _pinModalPendingWithdrawal = null;
+        }
+    } catch (err) {
+        if (errEl) { errEl.textContent = err.message || 'Failed to reset PIN'; errEl.classList.remove('hidden'); }
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Reset PIN';
+    }
+}
+
+window.openPinResetModal   = openPinResetModal;
+window.closePinResetModal  = closePinResetModal;
+window.requestPinResetOtp  = requestPinResetOtp;
+window.submitPinReset      = submitPinReset;
 
 // ── PIN Setup / Change (Settings page) ───────────────────────────────────────
 

@@ -13,6 +13,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { serve }        from 'https://deno.land/std@0.177.0/http/server.ts';
+import { checkRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 
 const SUPABASE_URL     = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -23,8 +24,8 @@ const IS_PRODUCTION    = Deno.env.get('ENVIRONMENT') === 'production';
 const ALLOWED_ORIGINS = new Set([
   'https://primeconnect.site',
   ...(!IS_PRODUCTION ? [
-    'http://127.0.0.1:5500', 'http://127.0.0.1:5501',
-    'http://localhost:5500',  'http://localhost:5501',
+    'http://127.0.0.1:5500', 'http://127.0.0.1:5501', 'http://127.0.0.1:5503',
+    'http://localhost:5500',  'http://localhost:5501', 'http://localhost:5503',
     'http://localhost:3000',
   ] : []),
 ]);
@@ -73,6 +74,21 @@ serve(async (req: Request) => {
   if (body.action === 'request-otp') {
     const email = (body.email as string ?? '').toLowerCase().trim();
     if (!email) return json({ success: false, error: 'Email is required' }, 400, req);
+
+    // ── Rate limiting ──────────────────────────────────────────────────────
+    // Was completely unlimited — someone could spam OTP requests for one
+    // email (SMS-bombing whoever's phone is on that account) or blast
+    // requests broadly (real per-message cost via Arkesel). Both per-IP and
+    // per-email since either alone misses one of the two abuse patterns.
+    const ip = getClientIp(req);
+    const ipRate = await checkRateLimit(db, `reset-password:ip:${ip}`, 5, 60 * 60_000);
+    if (!ipRate.allowed) {
+      return json({ success: false, error: 'Too many requests. Please try again later.', retry_after_seconds: ipRate.retryAfter }, 429, req);
+    }
+    const emailRate = await checkRateLimit(db, `reset-password:email:${email}`, 3, 15 * 60_000);
+    if (!emailRate.allowed) {
+      return json({ success: false, error: 'Too many reset attempts for this account. Please try again later.', retry_after_seconds: emailRate.retryAfter }, 429, req);
+    }
 
     // Look up user by email
     const { data: user } = await db

@@ -29,7 +29,8 @@ type Provider =
   | "hubnet"
   | "sparkdata"
   | "databosshub"
-  | "up2u";
+  | "up2u"
+  | "bundlezonegh";
 
 interface ProviderResult {
   success: boolean;
@@ -160,6 +161,14 @@ function mapNetworkUp2u(network: string): string {
   if (network === "mtn")        return "mtn";
   if (network === "telecel")    return "telecel";
   if (network === "airteltigo") return "airteltigo";
+  return network.toLowerCase();
+}
+// Bundle Zone GH's documented network keys are "mtn", "telecel", "ishare" —
+// airteltigo maps to "ishare", NOT "airteltigo".
+function mapNetworkBundleZoneGh(network: string): string {
+  if (network === "mtn")        return "mtn";
+  if (network === "telecel")    return "telecel";
+  if (network === "airteltigo") return "ishare";
   return network.toLowerCase();
 }
 async function placeJusticeDataOrder(
@@ -718,6 +727,50 @@ async function placeUp2uOrder(payload: OrderPayload): Promise<ProviderResult> {
     return { success: false, error: e instanceof Error ? e.message : "Up2u unknown error" };
   }
 }
+async function placeBundleZoneGhOrder(payload: OrderPayload): Promise<ProviderResult> {
+  const apiKey = Deno.env.get("BUNDLEZONEGH_API_KEY");
+  if (!apiKey) return { success: false, error: "Bundle Zone GH API key not configured" };
+
+  const networkKey = mapNetworkBundleZoneGh(payload.network);
+
+  try {
+    console.log(`[BundleZoneGH] ${payload.orderId} — ${payload.network} ${payload.bundleSize}GB -> ${payload.phone}`);
+
+    const res = await fetch("https://shisywgbcadfyfbcupve.supabase.co/functions/v1/developer-api", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action:       "place_order",
+        network:      networkKey,
+        recipient:    payload.phone,
+        package_size: payload.bundleSize,
+        order_id:     payload.orderId,
+      }),
+    });
+
+    let data: any = {};
+    try { data = await res.json(); } catch { /* non-JSON body, data stays {} */ }
+
+    if (!res.ok || data.success !== true) {
+      const errMsg = data.message || data.error || `HTTP ${res.status}`;
+      return { success: false, error: `BundleZoneGH error: ${errMsg}` };
+    }
+
+    console.log(`[BundleZoneGH] Success:`, JSON.stringify(data));
+    return {
+      success: true,
+      data: {
+        ...data.data,
+        message:                 data.message || "Order placed successfully",
+        _provider:               "bundlezonegh",
+        _network_key:            networkKey,
+        _bundlezonegh_reference: data.data?.reference,
+      },
+    };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "BundleZoneGH unknown error" };
+  }
+}
 async function dispatchToProvider(
   provider: Provider,
   payload: OrderPayload
@@ -739,6 +792,9 @@ async function dispatchToProvider(
 
     case "up2u":
       return await placeUp2uOrder(payload);
+
+    case "bundlezonegh":
+      return await placeBundleZoneGhOrder(payload);
 
     case "justicedata":
     default:
@@ -1080,19 +1136,62 @@ async function handleWalletTopup({
     return;
   }
 
-  let creditAmount: number = amountGHS;
+  // ── Derive credit amount — always validated against Paystack gross ─────────
+  // SECURITY FIX: this used to trust metadata.bundle_amount directly with no
+  // upper bound, meaning a user could set a low actual Paystack charge amount
+  // and a high bundle_amount in metadata client-side (both are set together
+  // in dashboard-main.js when opening the Paystack popup, with nothing
+  // stopping them from being edited independently before submission) and get
+  // credited far more than they actually paid. verify-paystack already had
+  // the correct fix for this exact scenario — ported here so both paths
+  // enforce the same guarantee. amountGHS itself is safe (it comes from
+  // reVerifyWithPaystack's direct call to Paystack's own API above, not from
+  // the webhook payload), but creditAmount was not being capped against it.
+  //
+  // Priority, same as verify-paystack:
+  //   1. bundle_amount + processing_charge — must sum to amountGHS ± 0.02
+  //   2. bundle_amount alone               — must be <= amountGHS
+  //   3. Last resort: reverse the 4% fee   — round(amountGHS / 1.04, 2)
+  //   Hard cap: creditAmount can NEVER exceed amountGHS.
+  const TOLERANCE = 0.02;
   const metaBundleAmount     = metadata?.bundle_amount     ?? paystackData?.metadata?.bundle_amount;
   const metaProcessingCharge = metadata?.processing_charge ?? paystackData?.metadata?.processing_charge;
 
-  if (metaBundleAmount !== undefined && metaBundleAmount !== null && metaBundleAmount !== "") {
-    creditAmount = parseFloat(String(metaBundleAmount));
-    console.log(`Crediting bundle_amount: GH₵${creditAmount} (Paystack total: GH₵${amountGHS})`);
-  } else if (metaProcessingCharge !== undefined && metaProcessingCharge !== null && metaProcessingCharge !== "") {
-    creditAmount = parseFloat((amountGHS - parseFloat(String(metaProcessingCharge))).toFixed(2));
-    console.log(`Derived credit: GH₵${creditAmount} (GH₵${amountGHS} - GH₵${metaProcessingCharge})`);
+  const parsedBundleAmt = (metaBundleAmount !== undefined && metaBundleAmount !== null && metaBundleAmount !== "")
+    ? parseFloat(String(metaBundleAmount))
+    : NaN;
+  const parsedCharge = (metaProcessingCharge !== undefined && metaProcessingCharge !== null && metaProcessingCharge !== "")
+    ? parseFloat(String(metaProcessingCharge))
+    : NaN;
+
+  let creditAmount: number;
+
+  if (!isNaN(parsedBundleAmt) && parsedBundleAmt > 0 && !isNaN(parsedCharge) && parsedCharge >= 0) {
+    const claimedTotal = parseFloat((parsedBundleAmt + parsedCharge).toFixed(2));
+    const diff = Math.abs(claimedTotal - amountGHS);
+    if (diff <= TOLERANCE) {
+      creditAmount = parsedBundleAmt;
+      console.log(`Credit from bundle_amount (validated): GH₵${creditAmount} | paid: GH₵${amountGHS} | charge: GH₵${parsedCharge} | diff: GH₵${diff}`);
+    } else {
+      console.warn(`bundle_amount(${parsedBundleAmt}) + charge(${parsedCharge}) = ${claimedTotal} != paid(${amountGHS}) diff=${diff} — possible tampering, falling back to fee reversal`);
+      creditAmount = Math.round((amountGHS / 1.04) * 100) / 100;
+    }
+  } else if (!isNaN(parsedBundleAmt) && parsedBundleAmt > 0) {
+    if (parsedBundleAmt <= amountGHS + TOLERANCE) {
+      creditAmount = parsedBundleAmt;
+      console.log(`Credit from bundle_amount only: GH₵${creditAmount} | paid: GH₵${amountGHS}`);
+    } else {
+      console.warn(`bundle_amount(${parsedBundleAmt}) exceeds paid(${amountGHS}) — possible tampering, falling back to fee reversal`);
+      creditAmount = Math.round((amountGHS / 1.04) * 100) / 100;
+    }
   } else {
-    console.warn(`No bundle_amount/processing_charge in metadata for ${reference} — crediting full GH₵${amountGHS}`);
+    console.warn(`No bundle_amount/processing_charge for ${reference} — reversed 4% fee: crediting GH₵${amountGHS}`);
+    creditAmount = Math.round((amountGHS / 1.04) * 100) / 100;
   }
+
+  // Hard cap — credit can never exceed what Paystack actually confirmed was paid.
+  creditAmount = Math.min(creditAmount, amountGHS);
+  creditAmount = Math.round(creditAmount * 100) / 100;
 
   if (isNaN(creditAmount) || creditAmount <= 0) {
     await writeOrphan(supabase, reference, amountGHS, paystackData, "wallet_invalid_credit_amount");
@@ -1496,6 +1595,37 @@ const { data: lockedOrder, error: lockError } = await supabase
 
  console.log(`Processing lock acquired: ${reference}`);
 
+// ── SECURITY: verify the registered price against what was actually paid ───
+// Defense-in-depth on top of the resolvePricing() fix in guest-buy-data:
+// even if a future bug or a different code path ever let a mismatched
+// price into adminorders.amount, this stops fulfillment here rather than
+// trusting that upstream validation was correct. Same principle as the
+// wallet top-up hard cap above — never deliver more value than was
+// actually confirmed paid via Paystack's own API.
+const TOLERANCE_ORDER = 0.02;
+if (sellingPrice > amountGHS + TOLERANCE_ORDER) {
+  console.error(
+    `PRICE MISMATCH: order ${reference} registered at GH₵${sellingPrice} but only GH₵${amountGHS} was paid — ` +
+    `holding for manual review instead of fulfilling.`
+  );
+  await supabase
+    .from("adminorders")
+    .update({
+      status: "manual_review",
+      processing_lock: false,
+      updated_at: new Date().toISOString(),
+      external_response: {
+        ...(existingOrder.external_response || {}),
+        price_mismatch: true,
+        registered_amount: sellingPrice,
+        paid_amount: amountGHS,
+      },
+    })
+    .eq("payment_reference", reference);
+  await markWebhookProcessed(supabase, reference);
+  return;
+}
+
 // ── Webhook-only fulfillment acknowledged ──────────────────────────
 // guest-buy-data already initialized the order.
 // This webhook now owns processing safely.
@@ -1577,8 +1707,33 @@ if (!providerAccepted) {
   return;
 }
 
+// ── Real provider cost lookup ────────────────────────────────────────────
+// `baseCost` above is inherited from the pre-registered order's selling-price
+// estimate, not real provider cost. Real wholesale cost (kept fresh by
+// sync-bundle-costs) lives in provider_bundle_costs, keyed by provider — look
+// it up now that we know which provider actually fulfilled this order.
+let providerCost: number | null = null;
+try {
+  const { data: costRow } = await supabase
+    .from("provider_bundle_costs")
+    .select("cost_price")
+    .eq("provider", orderResult.provider)
+    .eq("network", existingOrder.network.toLowerCase())
+    .eq("size_gb", existingOrder.package_size)
+    .eq("validity", "monthly")
+    .maybeSingle();
+  if (costRow) providerCost = parseFloat(String(costRow.cost_price));
+} catch (e) {
+  console.warn("provider_bundle_costs lookup failed:", e instanceof Error ? e.message : e);
+}
+const costSource = providerCost !== null ? "provider_synced" : "estimated_fallback";
+if (costSource === "estimated_fallback") {
+  console.warn(`[${orderResult.provider}] No synced cost for ${existingOrder.network} ${existingOrder.package_size}GB — profit is an ESTIMATE using selling price as cost.`);
+}
+const effectiveCost = providerCost ?? baseCost;
+
 const profit = parseFloat(
-  (sellingPrice - baseCost).toFixed(2)
+  (sellingPrice - effectiveCost).toFixed(2)
 );
 
 // Successful fulfillment update
@@ -1599,6 +1754,8 @@ await supabase
         orderResult?.data?.reference ??
         null,
       base_cost: baseCost,
+      provider_cost: providerCost,
+      cost_source: costSource,
       selling_price: sellingPrice,
       profit,
       fulfilled_at: new Date().toISOString(),
@@ -1628,6 +1785,8 @@ await supabase
       provider_response: orderResult.data,
       bundle_price: sellingPrice,
       base_cost: baseCost,
+      provider_cost: providerCost,
+      cost_source: costSource,
       profit,
       recipient: existingOrder.recipient,
     },

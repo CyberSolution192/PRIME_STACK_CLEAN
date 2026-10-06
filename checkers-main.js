@@ -26,6 +26,20 @@ function esc(str) {
   return div.innerHTML;
 }
 
+// esc() only HTML-escapes text content — it does nothing to stop a
+// javascript:/data: URI from being rendered as a clickable href, since
+// those contain no HTML-special characters for esc() to catch. Any string
+// used as an href needs this check too, not just esc().
+function safeUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') ? url : '';
+  } catch {
+    return '';
+  }
+}
+
 const state = {
   catalog: [],
   selected: null, // the currently selected product object
@@ -173,8 +187,9 @@ function showResultModal(data) {
   }
 
   const link = document.getElementById('checkerResultCheckLink');
-  if (data.results_link) {
-    link.href = data.results_link;
+  const safeResultsLink = safeUrl(data.results_link);
+  if (safeResultsLink) {
+    link.href = safeResultsLink;
     link.classList.remove('hidden');
   } else {
     link.classList.add('hidden');
@@ -287,7 +302,7 @@ function renderCheckerCard(o) {
         </div>
         <div class="flex items-center justify-between text-xs">
           <span class="text-gray-400"><i class="far fa-calendar mr-1"></i>${examDate ? esc(examDate) : 'Date not specified'}</span>
-          ${resultsLink ? `<a href="${esc(resultsLink)}" target="_blank" rel="noopener" class="text-brand-600 hover:text-brand-700 font-medium">Check results <i class="fas fa-arrow-up-right-from-square text-[10px]"></i></a>` : ''}
+          ${resultsLink ? `<a href="${esc(safeUrl(resultsLink))}" target="_blank" rel="noopener" class="text-brand-600 hover:text-brand-700 font-medium">Check results <i class="fas fa-arrow-up-right-from-square text-[10px]"></i></a>` : ''}
         </div>
       ` : `
         <p class="text-xs text-gray-400">

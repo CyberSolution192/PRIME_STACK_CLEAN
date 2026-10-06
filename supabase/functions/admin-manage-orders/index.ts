@@ -75,6 +75,7 @@ const ALLOWED_STATUSES = [
   "manual_review",
   "failed_provider",
   "processing_locked",
+  "refunded",
 ];
 const PREFIX_MAP: Record<string, string> = {
   GST:   "GST-%",
@@ -338,6 +339,116 @@ serve(async (req) => {
       }
 
       return json({ success: true, message: "Order status updated" });
+    }
+
+    // ── REFUND ORDER ─────────────────────────────────────────────────────────
+    // Closes the gap found during the security review: buy-data/buy-checker
+    // deduct the wallet up front, and a failed provider order previously had
+    // no path back to the customer except an admin separately finding them
+    // in Users → manually crediting an amount with no link back to the order
+    // that caused it. This ties the credit directly to the order: one action,
+    // one audit trail, and a guard against refunding the same order twice.
+    if (action === "refund-order") {
+      const orderId = body.orderId as string;
+      if (!orderId || typeof orderId !== "string") {
+        return json({ success: false, message: "Order ID required" }, 400);
+      }
+
+      const { data: order, error: orderErr } = await supabase
+        .from("adminorders")
+        .select("id, userid, order_reference, amount, status, external_response")
+        .eq("id", orderId)
+        .single();
+
+      if (orderErr || !order) return json({ success: false, message: "Order not found" }, 404);
+
+      if (!order.userid) {
+        return json({ success: false, message: "This order has no linked user (guest order) — refund via a different flow." }, 400);
+      }
+
+      // Only orders that actually failed to deliver should be refundable —
+      // never a completed order (that would be a chargeback, a separate
+      // workflow) and never one already refunded (the guard below also
+      // catches this atomically, but checking here gives a clearer message).
+      const refundableStatuses = ["failed_provider", "manual_review", "failed"];
+      if (!refundableStatuses.includes(order.status)) {
+        return json({
+          success: false,
+          message: `Only orders with status ${refundableStatuses.join(", ")} can be refunded. This order is: ${order.status}`,
+        }, 400);
+      }
+
+      if (order.external_response?.refunded) {
+        return json({ success: false, message: "This order has already been refunded" }, 409);
+      }
+
+      const refundAmount = Math.abs(parseFloat(String(order.amount || 0)));
+      if (isNaN(refundAmount) || refundAmount <= 0) {
+        return json({ success: false, message: "Invalid order amount — cannot refund" }, 400);
+      }
+
+      // Atomically claim this order for refund BEFORE crediting anything —
+      // same pattern as the processing_lock claim in paystack-webhook. The
+      // .eq() below only matches if refunded is still false/absent, so two
+      // concurrent refund attempts (double-click, or two admins) can't both
+      // win this update — only one succeeds, closing the race window that
+      // crediting-then-marking would leave open.
+      const { data: claimedOrder, error: claimErr } = await supabase
+        .from("adminorders")
+        .update({
+          status: "refunded",
+          updated_at: new Date().toISOString(),
+          external_response: {
+            ...(order.external_response || {}),
+            refunded: true,
+            refunded_amount: refundAmount,
+            refunded_at: new Date().toISOString(),
+            refunded_by: user.id,
+          },
+        })
+        .eq("id", orderId)
+        .eq("status", order.status) // only if it hasn't changed since we read it
+        .is("external_response->refunded", null)
+        .select()
+        .single();
+
+      if (claimErr || !claimedOrder) {
+        return json({ success: false, message: "This order was already refunded or its status changed — refresh and try again." }, 409);
+      }
+
+      // Same audited RPC already used for manual deposit approval — atomic
+      // wallet credit with its own internal record of who/why. If this fails
+      // after the claim above, the order is now stuck showing "refunded"
+      // without the money having moved — logged loudly so it isn't missed.
+      const { data: rpcResult, error: rpcError } = await supabase.rpc("admin_set_wallet_balance", {
+        p_user_id:  order.userid,
+        p_amount:   refundAmount,
+        p_action:   "add",
+        p_reason:   `Refund for failed order ${order.order_reference}`,
+        p_admin_id: user.id,
+      });
+
+      if (rpcError || !rpcResult?.success) {
+        console.error(`CRITICAL: order ${orderId} claimed as refunded but wallet credit failed:`, rpcError || rpcResult?.message);
+        return json({
+          success: false,
+          message: "Order was marked refunded but the wallet credit failed — needs manual follow-up.",
+        }, 500);
+      }
+
+      // Keep the matching transactions row consistent with the order.
+      await supabase
+        .from("transactions")
+        .update({ status: "refunded", updated_at: new Date().toISOString() })
+        .filter("details->>order_id", "eq", order.order_reference)
+        .then(({ error: e }) => { if (e) console.warn("refund tx sync (non-fatal):", e.message); });
+
+      await auditLog(supabase, user.id, "order_refunded", {
+        orderId, reference: order.order_reference, userId: order.userid, amount: refundAmount,
+      });
+
+      console.log(`Order ${order.order_reference} refunded — GH₵${refundAmount} credited to user ${order.userid} by admin ${user.id}`);
+      return json({ success: true, message: `Refunded GH₵${refundAmount.toFixed(2)} to customer`, new_balance: rpcResult.new_balance });
     }
 
     // ── BULK UPDATE ORDER STATUS ─────────────────────────────────────────────
@@ -700,7 +811,7 @@ serve(async (req) => {
 
       // Enum-validated settings
       const ENUM_SETTINGS: Record<string, string[]> = {
-        active_provider: ["justicedata", "pensite", "hubnet", "sparkdata", "databosshub", "up2u"],
+        active_provider: ["justicedata", "pensite", "hubnet", "sparkdata", "databosshub", "up2u", "bundlezonegh"],
         deposit_method:  ["automatic", "manual"],
       };
 

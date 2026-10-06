@@ -177,13 +177,12 @@ serve(async (req) => {
 
       const oldValid = await verifyPin(oldPin, profile.transaction_pin_hash);
       if (!oldValid) {
-        const newAttempts = (profile.pin_failed_attempts ?? 0) + 1;
-        const upd: Record<string, unknown> = { pin_failed_attempts: newAttempts };
-        if (newAttempts >= PIN_MAX_ATTEMPTS) {
-          upd.pin_locked_until   = new Date(Date.now() + PIN_LOCKOUT_MIN * 60000).toISOString();
-          upd.pin_failed_attempts = 0;
-        }
-        await db.from('users').update(upd).eq('id', user.id);
+        const { data: failResult } = await db.rpc('register_pin_failure', {
+          p_user_id: user.id,
+          p_max_attempts: PIN_MAX_ATTEMPTS,
+          p_lockout_min: PIN_LOCKOUT_MIN,
+        }).single();
+        const newAttempts = failResult?.new_attempts ?? PIN_MAX_ATTEMPTS;
         const rem = PIN_MAX_ATTEMPTS - newAttempts;
         return json({
           success: false,
@@ -235,13 +234,12 @@ serve(async (req) => {
 
     const valid = await verifyPin(pin, profile.transaction_pin_hash);
     if (!valid) {
-      const newAttempts = (profile.pin_failed_attempts ?? 0) + 1;
-      const upd: Record<string, unknown> = { pin_failed_attempts: newAttempts };
-      if (newAttempts >= PIN_MAX_ATTEMPTS) {
-        upd.pin_locked_until   = new Date(Date.now() + PIN_LOCKOUT_MIN * 60000).toISOString();
-        upd.pin_failed_attempts = 0;
-      }
-      await db.from('users').update(upd).eq('id', user.id);
+      const { data: failResult } = await db.rpc('register_pin_failure', {
+        p_user_id: user.id,
+        p_max_attempts: PIN_MAX_ATTEMPTS,
+        p_lockout_min: PIN_LOCKOUT_MIN,
+      }).single();
+      const newAttempts = failResult?.new_attempts ?? PIN_MAX_ATTEMPTS;
       const rem = PIN_MAX_ATTEMPTS - newAttempts;
       return json({
         success: false,

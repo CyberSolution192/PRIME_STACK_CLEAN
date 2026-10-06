@@ -11,6 +11,7 @@
  */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateName } from "../_shared/input-sanitize.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -61,6 +62,12 @@ serve(async (req) => {
   if (phone && !/^[0-9+\s\-()]{7,20}$/.test(phone)) {
     return json({ success: false, message: "Invalid phone number format" }, 400);
   }
+
+  const firstNameError = validateName(firstName, "First name");
+  if (firstNameError) return json({ success: false, message: firstNameError }, 400);
+
+  const lastNameError = validateName(lastName, "Last name");
+  if (lastNameError) return json({ success: false, message: lastNameError }, 400);
 
   const fullname = [firstName, lastName].filter(Boolean).join(" ");
 

@@ -10,6 +10,7 @@
 // ============================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit } from '../_shared/rate-limit.ts';
 
 const SUPABASE_URL      = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -17,6 +18,14 @@ const SERVICE_ROLE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const FUNCTIONS_BASE    = `${SUPABASE_URL}/functions/v1`;
 const SESSION_COOKIE    = 'user_sid';
 const SESSION_TTL_SEC   = 8 * 60 * 60;
+
+// General ceiling for any single logged-in user across all actions behind
+// this gateway (dashboard polling, balance checks, browsing bundles, etc).
+const PROXY_RATE_LIMIT = 80;   // requests per minute per user
+// Tighter ceiling specifically for buy-data, since each call moves money
+// and hits the DataBossHub partner API — a burst here is the costliest
+// kind of abuse (see the CSRF/DoS review discussion).
+const BUY_DATA_RATE_LIMIT = 12; // requests per minute per user
 
 const ALLOWED_TARGETS = new Set([
   'get-user-data',
@@ -41,8 +50,10 @@ const ALLOWED_ORIGINS = new Set([
   ...( IS_PRODUCTION ? [] : [
     'http://127.0.0.1:5500',
     'http://127.0.0.1:5501',
+    'http://127.0.0.1:5503',
     'http://localhost:5500',
     'http://localhost:5501',
+    'http://localhost:5503',
     "http://localhost:3000", 
   ]),
 ]);
@@ -54,9 +65,13 @@ const CORS_HEADERS = {
   'Vary': 'Origin',
 };
 
+const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):\d+$/;
+
 function getAllowedOrigin(req: Request): string {
   const origin = req.headers.get('Origin') ?? '';
-  return ALLOWED_ORIGINS.has(origin) ? origin : 'https://no-cors-for-you';
+  if (ALLOWED_ORIGINS.has(origin)) return origin;
+  if (!IS_PRODUCTION && LOCAL_DEV_ORIGIN_RE.test(origin)) return origin;
+  return 'https://no-cors-for-you';
 }
 
 function parseCookie(header: string | null, name: string): string | null {
@@ -149,6 +164,30 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  // ── CSRF fix #1: actually enforce the origin check ──────────────────────────
+  // getAllowedOrigin() was previously only used to LABEL the response's CORS
+  // header — it never stopped processing when the origin didn't match, which
+  // meant a cross-site request (carrying the SameSite=None session cookie)
+  // would still execute even though the attacker's JS couldn't read the reply.
+  // Reject outright here instead. The browser's Origin header can't be forged
+  // or overridden by client-side JS, even cross-site, so this is a hard
+  // guarantee for a browser-only frontend like this one.
+  if (origin === 'https://no-cors-for-you') {
+    return respond({ error: 'Origin not allowed' }, 403, req);
+  }
+
+  // ── CSRF fix #2: require the real Content-Type, don't just parse anything ──
+  // req.json() previously parsed the body regardless of what Content-Type was
+  // declared. That let a cross-site request labeled Content-Type: text/plain
+  // (a "simple request" the browser never preflights) carry a JSON-shaped body
+  // straight through. Requiring the real header forces any cross-site attempt
+  // back through a CORS preflight, where the origin check above gets to run
+  // before anything executes.
+  const contentType = req.headers.get('Content-Type') ?? '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    return respond({ error: 'Content-Type must be application/json' }, 415, req);
+  }
+
   // ── Parse body ─────────────────────────────────────────────────────────────
   // No method guard — Supabase HTTP/2 runtime can misreport req.method.
   // We validate the request entirely by body content.
@@ -180,6 +219,30 @@ Deno.serve(async (req: Request) => {
       { success: false, error: 'Session invalid or expired', requiresLogin: true },
       401, req,
     );
+  }
+
+  // ── Rate limiting ────────────────────────────────────────────────────────
+  // General ceiling covers every action behind this gateway; buy-data gets
+  // an additional, tighter ceiling on top since it's the costliest action
+  // (moves wallet balance, hits the DataBossHub partner API per call).
+  const rlClient = serviceClient();
+
+  const generalRate = await checkRateLimit(rlClient, `proxy:user:${sessionData.user_id}`, PROXY_RATE_LIMIT);
+  if (!generalRate.allowed) {
+    return respond(
+      { success: false, error: 'Too many requests. Please slow down.', retry_after_seconds: generalRate.retryAfter },
+      429, req,
+    );
+  }
+
+  if (targetFn === 'buy-data') {
+    const buyRate = await checkRateLimit(rlClient, `buy-data:user:${sessionData.user_id}`, BUY_DATA_RATE_LIMIT);
+    if (!buyRate.allowed) {
+      return respond(
+        { success: false, error: 'Too many purchase attempts. Please wait a moment.', retry_after_seconds: buyRate.retryAfter },
+        429, req,
+      );
+    }
   }
 
   // ── Forward to target function ─────────────────────────────────────────────

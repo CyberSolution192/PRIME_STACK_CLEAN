@@ -127,6 +127,94 @@ Deno.serve(async (req) => {
         }, 400);
       }
 
+      // ── Re-verify available profit before APPROVING ─────────────────────
+      // This is the checkpoint that actually matters for preventing
+      // overpayment: it runs BEFORE the admin sends any real money (that
+      // happens after approval, outside this system, via the admin's own
+      // MoMo app — by the time mark-sent/admin_debit_wallet runs, the real
+      // payout has already gone out and can't be un-sent). Recomputes the
+      // same profit calculation submit-withdrawal used, live, rather than
+      // trusting the amount stored on the row at request time — protects
+      // against the underlying figures having changed since, or the
+      // now-closed submission race having let through more pending
+      // withdrawals than were actually available. reject is exempt — it
+      // never risks money leaving.
+      if (action === "approve") {
+        const [ordersRes, bundlesRes, ubpRes, completedWithdrawalsRes, pendingWithdrawalsRes] =
+          await Promise.all([
+            supabase
+              .from("adminorders")
+              .select("amount, network, package_size, external_response")
+              .or("order_reference.like.STORE-%,order_reference.like.GST-%,order_reference.like.PAY-%")
+              .eq("status", "completed")
+              .filter("external_response->>storeownerid", "eq", current.user_id),
+            supabase.from("bundles").select("id, network, size, price").eq("active", true),
+            supabase.from("user_bundle_prices").select("bundle_id, custom_price").eq("user_id", current.user_id),
+            supabase.from("withdrawal_requests").select("amount")
+              .eq("user_id", current.user_id).eq("status", "completed"),
+            // Exclude the row being approved from its own "already pending"
+            // total — it's the one we're about to approve.
+            supabase.from("withdrawal_requests").select("amount")
+              .eq("user_id", current.user_id).eq("status", "pending").neq("id", id),
+          ]);
+
+        const bundleBaseMap: Record<string, number> = {};
+        const bundleIdMap: Record<string, string>   = {};
+        (bundlesRes.data || []).forEach((b: any) => {
+          const key = b.network.toLowerCase() + '-' + b.size;
+          bundleBaseMap[key] = parseFloat(b.price);
+          bundleIdMap[key]   = b.id;
+        });
+
+        const customCostMap: Record<string, number> = {};
+        (ubpRes.data || []).forEach((r: any) => { customCostMap[r.bundle_id] = parseFloat(r.custom_price); });
+
+        let totalEarned = 0;
+        for (const order of (ordersRes.data || [])) {
+          const ext          = order.external_response || {};
+          const sellingPrice = parseFloat(String(ext.selling_price ?? order.amount ?? 0));
+          const rawSavedCost = ext.base_cost;
+          const bundleKey    = (order.network || '').toLowerCase() + '-' + order.package_size;
+          const bundleId     = bundleIdMap[bundleKey];
+
+          let baseCost: number;
+          if (rawSavedCost !== null && rawSavedCost !== undefined) {
+            baseCost = parseFloat(String(rawSavedCost));
+          } else if (bundleId && customCostMap[bundleId] != null) {
+            baseCost = customCostMap[bundleId];
+          } else {
+            baseCost = bundleBaseMap[bundleKey] || 0;
+          }
+
+          const savedProfit = (ext.profit !== undefined && ext.profit !== null)
+            ? parseFloat(String(ext.profit))
+            : null;
+
+          totalEarned += savedProfit !== null
+            ? Math.max(0, savedProfit)
+            : Math.max(0, sellingPrice - baseCost);
+        }
+
+        const totalWithdrawn = (completedWithdrawalsRes.data || [])
+          .reduce((s: number, w: any) => s + parseFloat(w.amount || 0), 0);
+        const otherPending = (pendingWithdrawalsRes.data || [])
+          .reduce((s: number, w: any) => s + parseFloat(w.amount || 0), 0);
+        const availableProfits = Math.max(0, totalEarned - totalWithdrawn - otherPending);
+
+        if (parseFloat(String(current.amount)) > availableProfits) {
+          await auditLog(supabase, user.id, "withdrawal_approve_blocked_insufficient_profit", {
+            withdrawalId: id,
+            userId: current.user_id,
+            requestedAmount: current.amount,
+            actualAvailableProfit: availableProfits,
+          });
+          return json({
+            success: false,
+            message: `Cannot approve: this user's current available profit (GH₵${availableProfits.toFixed(2)}) no longer covers this withdrawal (GH₵${parseFloat(String(current.amount)).toFixed(2)}). Reject it or ask them to resubmit.`,
+          }, 400);
+        }
+      }
+
       const newStatus = action === "approve" ? "approved" : "rejected";
 
       const { error } = await supabase
@@ -177,7 +265,14 @@ Deno.serve(async (req) => {
 
       // Step 1 — approved → processing
       if (current.status === "approved") {
-        const { error: procErr } = await supabase
+        // CRITICAL: .select() + row-count check, not just error-check.
+        // A conditional UPDATE that matches zero rows is NOT an error in
+        // Postgres — it succeeds silently with no rows changed. Without
+        // checking the actual row count here, two near-simultaneous
+        // mark-sent calls (double-click, slow network, two admins) would
+        // BOTH proceed past this guard and BOTH debit the wallet — the
+        // second one debiting for a payout that was already sent.
+        const { data: transitioned, error: procErr } = await supabase
           .from("withdrawal_requests")
           .update({
             status: "processing",
@@ -186,11 +281,21 @@ Deno.serve(async (req) => {
             updated_at: new Date().toISOString(),
           })
           .eq("id", id)
-          .eq("status", "approved");
+          .eq("status", "approved")
+          .select("id");
 
         if (procErr) {
           console.error("Failed to set status=processing:", procErr);
           return json({ success: false, message: procErr.message }, 500);
+        }
+
+        if (!transitioned || transitioned.length === 0) {
+          // Someone else's request already moved this out of 'approved' —
+          // do NOT proceed to debit the wallet a second time.
+          return json({
+            success: false,
+            message: "This withdrawal was already being processed by another request. No duplicate payout was made.",
+          }, 409);
         }
 
         // Step 2 — debit wallet (soft-fail: money already sent, log and continue)
@@ -213,18 +318,26 @@ Deno.serve(async (req) => {
       }
 
       // Step 3 — processing → completed
-      const { error: completeErr } = await supabase
+      const { data: completedRows, error: completeErr } = await supabase
         .from("withdrawal_requests")
         .update({
           status: "completed",
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
-        .eq("status", "processing");
+        .eq("status", "processing")
+        .select("id");
 
       if (completeErr) {
         console.error("Failed to set status=completed:", completeErr);
         return json({ success: false, message: completeErr.message }, 500);
+      }
+
+      if (!completedRows || completedRows.length === 0) {
+        // Already completed by another request — the wallet debit above is
+        // still correctly guarded (it only ever runs once), this just
+        // avoids logging a second misleading "completed" audit entry.
+        return json({ success: true, message: "Withdrawal was already marked as completed." });
       }
 
       await auditLog(supabase, user.id, "withdrawal_mark-sent", {

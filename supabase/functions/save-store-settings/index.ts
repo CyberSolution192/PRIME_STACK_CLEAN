@@ -14,19 +14,8 @@
  */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-  const CORS = {
-  "Access-Control-Allow-Origin": "https://rpolemxgussziexdmdxe.supabase.co",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
-}
+import { rejectUnsafeChars } from "../_shared/input-sanitize.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 function isValidHex(hex: string): boolean {
   return /^#[0-9A-Fa-f]{6}$/.test(hex);
@@ -82,6 +71,18 @@ async function generateUniqueShortCode(
 }
 
 serve(async (req) => {
+  // Scoped inside the request handler (not module-level) so each request's
+  // own Origin header drives its own response — no risk of one request's
+  // allowed origin leaking into a concurrent request's response.
+  const CORS = corsHeaders(req);
+
+  function json(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
+
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ success: false, message: "Method not allowed" }, 405);
 
@@ -118,6 +119,12 @@ serve(async (req) => {
   const waSupport    = (body.whatsapp_support || "").trim().slice(0, 200);
   const waGroup      = (body.whatsapp_group  || "").trim().slice(0, 200);
   const themeColor   = (body.theme_color     || "#0ea5e9").trim();
+
+  const nameError = rejectUnsafeChars(name, "Store name");
+  if (nameError) return json({ success: false, message: nameError }, 400);
+
+  const descriptionError = rejectUnsafeChars(description, "Description");
+  if (descriptionError) return json({ success: false, message: descriptionError }, 400);
 
   if (supportPhone && !isValidPhone(supportPhone)) {
     return json({ success: false, message: "Invalid support phone number" }, 400);

@@ -18,6 +18,25 @@
 //
 // Deploy:
 //   supabase functions deploy security-alert --no-verify-jwt
+//
+// ⚠️ ACTION REQUIRED if you already have this cron job set up: it must now
+// send the service-role key as a Bearer token, or every call will get 401'd
+// by the auth gate added below. Check your existing cron.schedule() call in
+// Supabase Dashboard → Database → Cron Jobs — if it doesn't already include
+// the 'Authorization' header shown here, update it to match:
+//
+//   select cron.schedule(
+//     'security-alert',
+//     '*/5 * * * *',  -- every 5 minutes
+//     $$select net.http_post(
+//       url := '<YOUR_SUPABASE_URL>/functions/v1/security-alert',
+//       headers := jsonb_build_object(
+//         'Authorization', 'Bearer <SERVICE_ROLE_KEY>',
+//         'Content-Type', 'application/json'
+//       ),
+//       timeout_milliseconds := 10000
+//     )$$
+//   );
 // ============================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -36,15 +55,21 @@ const ADMIN_PHONE      = Deno.env.get('ADMIN_ALERT_PHONE');  // e.g. 0241234567
 const LAST_ALERTED_KEY = 'security_alert_last_sent';
 
 serve(async (req: Request) => {
-  // Accept calls from pg_cron (no Origin header) or internal orchestration.
-  // Reject browser requests.
-  const origin = req.headers.get('Origin');
-  if (origin) {
-    return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 });
-  }
-
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204 });
+  }
+
+  // ── Auth: only pg_cron / trusted service callers ────────────────────────
+  // The previous check only rejected requests carrying an Origin header,
+  // which blocks a browser but does nothing against curl, Postman, or any
+  // other non-browser client — this endpoint was effectively callable by
+  // anyone who found the URL. Matches the same gate already used correctly
+  // in reconcile-pending-payments, reconcile-stale-orders, and
+  // sync-bundle-costs.
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token || token !== SERVICE_ROLE_KEY) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
 
   if (!ADMIN_PHONE) {

@@ -18,6 +18,16 @@ document.addEventListener('DOMContentLoaded', function () {
   on('pinBackspaceBtn',  'click', function() { pinBackspace(); });
   on('pinVerifySubmit',  'click', function() { submitPinVerify(); });
 
+  // ── PIN reset ("Forgot PIN?") ────────────────────────────────────────────────
+  on('forgotPinLinkBtn',     'click', function() { openPinResetModal(); });
+  on('forgotPinSettingsBtn', 'click', function() { openPinResetModal(); });
+  on('pinResetRequestBtn',  'click', function() { requestPinResetOtp(); });
+  on('pinResetResendBtn',   'click', function() { requestPinResetOtp(); });
+  on('pinResetVerifyBtn',   'click', function() { submitPinReset(); });
+  on('pinResetCancelBtn1',  'click', function() { closePinResetModal(); });
+  on('pinResetCancelBtn2',  'click', function() { closePinResetModal(); });
+  on('pinResetBackdrop',    'click', function() { closePinResetModal(); });
+
   // ── PIN setup banner ───────────────────────────────────────────────────────
   on('pinBannerSetupBtn', 'click', function() {
     navigateTo('settings');

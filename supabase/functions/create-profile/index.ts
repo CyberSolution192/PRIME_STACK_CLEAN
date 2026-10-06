@@ -21,6 +21,8 @@
  */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateName } from "../_shared/input-sanitize.ts";
+import { checkRateLimit, getClientIp } from "../_shared/rate-limit.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -54,6 +56,16 @@ serve(async (req) => {
     return json({ success: false, message: "Invalid or expired token" }, 401);
   }
 
+  // ── Rate limiting ────────────────────────────────────────────────────────
+  // signup itself calls supabase.auth.signUp() directly from the frontend
+  // (Supabase's own managed Auth API), so it can't be gated here. This runs
+  // right after every successful signup, so it's the practical backstop
+  // against mass/bot account creation from one source.
+  const signupRate = await checkRateLimit(supabase, `signup:ip:${getClientIp(req)}`, 5, 60 * 60_000);
+  if (!signupRate.allowed) {
+    return json({ success: false, message: "Too many accounts created recently. Please try again later.", retry_after_seconds: signupRate.retryAfter }, 429);
+  }
+
   // ── Parse and validate body ────────────────────────────────────────────────
   let body: { fullname?: string; phone?: string };
   try {
@@ -68,6 +80,9 @@ serve(async (req) => {
   if (!fullname) {
     return json({ success: false, message: "Full name is required" }, 400);
   }
+
+  const fullnameError = validateName(fullname, "Full name");
+  if (fullnameError) return json({ success: false, message: fullnameError }, 400);
 
   // Phone must be 9 digits (user types without the leading 0 or country code)
   if (!/^\d{9}$/.test(rawPhone)) {

@@ -178,12 +178,17 @@
                     container.innerHTML = `
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
                             ${bundles.map(bundle => `
-                                <div class="card p-4 hover:shadow-md transition-shadow cursor-pointer"
-                                onclick="app.selectBundle('${bundle.id}', '${bundle.name}', ${bundle.price}, '${bundle.description}', '${bundle.network}', ${bundle.size})">                           
+                                <div class="card p-4 hover:shadow-md transition-shadow cursor-pointer bundle-card"
+                                data-bundle-id="${esc(bundle.id)}"
+                                data-bundle-name="${esc(bundle.name)}"
+                                data-bundle-price="${esc(bundle.price)}"
+                                data-bundle-description="${esc(bundle.description)}"
+                                data-bundle-network="${esc(bundle.network)}"
+                                data-bundle-size="${esc(bundle.size)}">                           
                                          <div class="flex justify-between items-start mb-3">
                                         <div>
                                             <h4 class="font-bold text-slate-800 text-lg">${bundle.name}</h4>
-                                            <p class="text-sm text-slate-500">${bundle.size}GB • ${bundle.description}</p>
+                                            <p class="text-sm text-slate-500">${bundle.description}</p>
                                         </div>
                                         <div class="text-right">
                                             <p class="font-bold text-brand-600 text-xl">${formatCurrency(bundle.price)}</p>
@@ -309,12 +314,11 @@
                     return;
                 }
 
-                // Ask for payer's phone number
-                const payerPhone = prompt("Enter your mobile money number to make payment:", "024");
-                if (!payerPhone || !validatePhone(payerPhone)) {
-                    showToast('Please enter a valid mobile money number', 'error');
-                    return;
-                }
+                // Payer's phone — reuse the number already entered above rather
+                // than asking again (was previously a second prompt() here,
+                // on top of the field already collected, on top of Paystack's
+                // own checkout asking a third time for mobile money).
+                const payerPhone = recipientPhone;
 
                 // Store payment info in state (including charge for verification)
                 state.paystackState = {
@@ -765,7 +769,7 @@
                                 </div>
                             </div>
                             <p class="text-sm text-gray-500 mb-6">Delivery usually takes 1-5 minutes</p>
-                            <button onclick="location.reload()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 rounded-lg">
+                            <button data-action="reload-page" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 rounded-lg">
                                 Buy Another Bundle
                             </button>
                         </div>

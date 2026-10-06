@@ -1,4 +1,4 @@
- import { supabase, PAYSTACK_PUBLIC_KEY, SUPABASE_PROJECT_URL, SUPABASE_ANON } from './supabase-config.js';
+import { supabase, PAYSTACK_PUBLIC_KEY, SUPABASE_PROJECT_URL, SUPABASE_ANON } from './supabase-config.js';
     
     const supabaseKey = SUPABASE_ANON; // used for edge function Authorization header
 
@@ -12,6 +12,50 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
     }
+
+    // ── Announcement Ticker ───────────────────────────────────────────────
+    // Same source as the dashboard's ticker (get-announcement is a public,
+    // unauthenticated endpoint) — guest storefront visitors now see the
+    // same announcements logged-in dashboard users do.
+    async function initTicker() {
+        try {
+            const res = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/get-announcement`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_ANON,
+                }
+            });
+            const data = await res.json();
+
+            if (!data.success || !data.active || !data.announcement) {
+                document.getElementById('announcementTicker')?.classList.add('hidden');
+                return;
+            }
+
+            const text   = data.announcement;
+            const track  = document.getElementById('tickerTrack');
+            const ticker = document.getElementById('announcementTicker');
+            if (!track || !ticker) return;
+
+            const itemHTML = `
+                <span class="ticker-item">
+                    <span class="ticker-dot"></span>
+                    <i class="fas fa-bullhorn" style="opacity:.7;font-size:11px"></i>
+                    ${esc(text)}
+                </span>`;
+
+            track.innerHTML = itemHTML.repeat(8);
+            ticker.classList.remove('hidden');
+
+            const speed = Math.max(100, Math.min(160, text.length * 1.5));
+            track.style.animationDuration = speed + 's';
+
+        } catch (err) {
+            console.warn('Ticker load failed (non-fatal):', err.message);
+        }
+    }
+    initTicker();
 
 let storeOwnerUserId = null;
 let storeShortCode = null; // set once loadStore resolves ?s= param
@@ -691,7 +735,7 @@ async function processPurchase() {
                         class="track-from-success-btn w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
                         <i class="fas fa-search-location"></i> Track This Order
                     </button>
-                    <button onclick="document.getElementById('successOverlay').remove(); location.reload();"
+                    <button data-action="close-success-reload"
                         class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl transition-colors">
                         Buy Another Bundle
                     </button>
@@ -731,10 +775,23 @@ function openTrackFromSuccess(phone) {
 
     // Handle click events via delegation and use data attributes for safe data passing.
     document.addEventListener('click', function(e) {
-        const btn = e.target.closest('.track-from-success-btn');
-        if (!btn) return;
-        const phone = btn.getAttribute('data-phone') || '';
-        openTrackFromSuccess(phone);
+        const trackBtn = e.target.closest('.track-from-success-btn');
+        if (trackBtn) {
+            const phone = trackBtn.getAttribute('data-phone') || '';
+            openTrackFromSuccess(phone);
+            return;
+        }
+
+        if (e.target.closest('[data-action="close-success-reload"]')) {
+            document.getElementById('successOverlay')?.remove();
+            location.reload();
+            return;
+        }
+
+        if (e.target.closest('[data-action="refresh-track-order"]')) {
+            trackOrder();
+            return;
+        }
     });
 
 async function trackOrder() {
@@ -926,7 +983,7 @@ function renderTrackResults(orders) {
                 <i class="fas fa-list text-blue-500 mr-1"></i>
                 ${orders.length} order${orders.length > 1 ? 's' : ''} found
             </p>
-            <button onclick="trackOrder()" class="text-xs flex items-center gap-1 text-gray-500 hover:text-blue-600 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
+            <button data-action="refresh-track-order" class="text-xs flex items-center gap-1 text-gray-500 hover:text-blue-600 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
                 <i class="fas fa-sync-alt"></i> Refresh
             </button>
         </div>

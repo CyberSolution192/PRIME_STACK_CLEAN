@@ -19,6 +19,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit, getClientIp } from "../_shared/rate-limit.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -100,6 +101,11 @@ serve(async (req) => {
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  const rate = await checkRateLimit(supabase, `public:track-guest-order:${getClientIp(req)}`, 90, 60_000);
+  if (!rate.allowed) {
+    return new Response(JSON.stringify({ success: false, message: "Too many requests", retry_after_seconds: rate.retryAfter }), { status: 429, headers: { ...CORS, "Content-Type": "application/json" } });
+  }
 
   try {
 

@@ -1,4 +1,4 @@
- import { supabase as supabaseClient, SUPABASE_PROJECT_URL, SUPABASE_ANON } from './supabase-config.js';
+ import { supabase as supabaseClient, SUPABASE_PROJECT_URL, SUPABASE_ANON, escapeHtml } from './supabase-config.js';
         
         // DOM Elements
         const signupForm = document.getElementById('signup-form');
@@ -24,7 +24,7 @@
             toast.innerHTML = `
                 <div class="flex items-center">
                     <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} mr-3"></i>
-                    <span class="font-medium">${message}</span>
+                    <span class="font-medium">${escapeHtml(message)}</span>
                 </div>
             `;
             
@@ -51,7 +51,7 @@
             
             message.innerHTML = `
                 <i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'success' ? 'check-circle' : 'info-circle'} mt-0.5"></i>
-                <span>${text}</span>
+                <span>${escapeHtml(text)}</span>
             `;
             
             messageContainer.appendChild(message);
@@ -234,15 +234,15 @@
                 }
                 
                 // Show success message
-                showToast('Account created successfully! Please check your email to confirm your account.', 'success');
-                showMessage('Account created! Please check your email for confirmation link.', 'success');
+                showToast('Account created successfully!', 'success');
+                showMessage('Account created successfully! You can now log in.', 'success');
                 
                 // Reset form
                 signupForm.reset();
                 
                 // Redirect to login page after delay
                 setTimeout(() => {
-                    window.location.href = 'login.html?message=Account created successfully! Please check your email to confirm your account.';
+                    window.location.href = 'login.html?message=' + encodeURIComponent('Account created successfully! You can now log in.');
                 }, 3000);
                 
             } catch (error) {

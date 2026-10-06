@@ -9,6 +9,7 @@
     adminVerifyOTP,
     adminLogout,
     tryRestoreSession,
+    adminAuthAction,
     SUPABASE_PROJECT_URL,
     SUPABASE_ANON,
   } from './ac-9ae690d2f5e8.js';
@@ -250,6 +251,7 @@
         break;
     case 'send-sms':
         checkSMSBalance();
+        loadSMSProviders();
         break;
     
     // NEW PAGES
@@ -277,6 +279,7 @@
         loadSettings();
         loadProviderSettings();
         loadSiteLock();
+        loadTrustedDevices();
         break;
     case 'analytics':
         loadAnalytics();
@@ -1153,7 +1156,7 @@ const statusColor =
             data-user-balance="${user.wallets?.balance || 0}">
             <i class="fas fa-wallet" style="font-size:11px"></i>Edit Balance
           </button>
-          ${store ? `<button onclick="admin.navigateTo('custom-pricing')"
+          ${store ? `<button data-action="navigate" data-arg="custom-pricing"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors">
             <i class="fas fa-tags" style="font-size:11px"></i>Pricing
           </button>` : ''}`;
@@ -1286,6 +1289,7 @@ const statusColor =
       sparkdata:    'Spark Data GH',
       databosshub:  'DataBossHub',
       up2u:         'Up2u',
+      bundlezonegh: 'Bundle Zone GH',
     };
 
     async function loadProviderSettings() {
@@ -1357,6 +1361,99 @@ const statusColor =
         loadProviderSettings();
       }
     }
+
+    // ── Trusted Devices ──────────────────────────────────────────────────────
+    function formatDeviceDate(iso) {
+      if (!iso) return 'Unknown';
+      const d = new Date(iso);
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) +
+        ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function summarizeUserAgent(ua) {
+      if (!ua) return 'Unknown device';
+      if (/iPhone/i.test(ua)) return 'iPhone';
+      if (/iPad/i.test(ua)) return 'iPad';
+      if (/Android/i.test(ua)) return 'Android device';
+      if (/Macintosh/i.test(ua)) return 'Mac';
+      if (/Windows/i.test(ua)) return 'Windows PC';
+      if (/Linux/i.test(ua)) return 'Linux PC';
+      return ua.slice(0, 40);
+    }
+
+    async function loadTrustedDevices() {
+      const listEl = document.getElementById('trusted-devices-list');
+      if (!listEl) return;
+      listEl.innerHTML = '<p class="text-sm text-slate-400">Loading...</p>';
+
+      try {
+        const result = await adminAuthAction('list-trusted-devices');
+        if (!result.success) throw new Error(result.error || 'Failed to load devices');
+
+        const devices = result.devices || [];
+        if (devices.length === 0) {
+          listEl.innerHTML = '<p class="text-sm text-slate-400">No trusted devices yet. Your next login after entering an OTP will add one.</p>';
+          return;
+        }
+
+        listEl.innerHTML = devices.map(d => `
+          <div class="flex items-center justify-between p-3 rounded-lg border border-slate-200">
+            <div>
+              <p class="text-sm font-medium text-slate-700">${summarizeUserAgent(d.device_label)}</p>
+              <p class="text-xs text-slate-500">${d.ip_address || 'Unknown IP'} · last used ${formatDeviceDate(d.last_used_at)}</p>
+              <p class="text-xs text-slate-400">Trusted since ${formatDeviceDate(d.created_at)} · expires ${formatDeviceDate(d.expires_at)}</p>
+            </div>
+            <button class="revoke-device-btn text-red-600 hover:text-red-700 text-sm font-medium" data-device-id="${d.id}">
+              Revoke
+            </button>
+          </div>
+        `).join('');
+
+        listEl.querySelectorAll('.revoke-device-btn').forEach(btn => {
+          btn.addEventListener('click', () => revokeTrustedDevice(btn.dataset.deviceId));
+        });
+      } catch (err) {
+        console.error('Error loading trusted devices:', err);
+        listEl.innerHTML = '<p class="text-sm text-red-500">Failed to load trusted devices.</p>';
+      }
+    }
+
+    async function revokeTrustedDevice(deviceId) {
+      const statusEl = document.getElementById('trusted-devices-status');
+      try {
+        const result = await adminAuthAction('revoke-trusted-device', { device_id: deviceId });
+        if (!result.success) throw new Error(result.error || 'Failed to revoke device');
+        showToast('Device revoked — it will need OTP on next login.', 'success');
+        loadTrustedDevices();
+      } catch (err) {
+        console.error('Error revoking device:', err);
+        if (statusEl) {
+          statusEl.textContent = `✗ Failed to revoke: ${err.message || 'Unknown error'}`;
+          statusEl.className = 'text-sm text-red-500 mt-2 h-5';
+        }
+        showToast('Failed to revoke device', 'error');
+      }
+    }
+
+    async function revokeAllTrustedDevices() {
+      const statusEl = document.getElementById('trusted-devices-status');
+      if (!confirm('This will require OTP on every device next time you log in, including this one\'s next session. Continue?')) return;
+      try {
+        const result = await adminAuthAction('revoke-all-trusted-devices');
+        if (!result.success) throw new Error(result.error || 'Failed to revoke devices');
+        showToast('All trusted devices revoked.', 'success');
+        loadTrustedDevices();
+      } catch (err) {
+        console.error('Error revoking all devices:', err);
+        if (statusEl) {
+          statusEl.textContent = `✗ Failed to revoke devices: ${err.message || 'Unknown error'}`;
+          statusEl.className = 'text-sm text-red-500 mt-2 h-5';
+        }
+        showToast('Failed to revoke devices', 'error');
+      }
+    }
+
+    document.getElementById('revoke-all-devices-btn')?.addEventListener('click', revokeAllTrustedDevices);
 
     // Settings
     async function loadSettings() {
@@ -2206,6 +2303,30 @@ const statusColor =
           orderData.created_at
         );
 
+        // Show the refund block only when it's actually applicable: a
+        // registered user (guest orders have no wallet to credit), a status
+        // that means the purchase failed to deliver, and not already refunded.
+        (function updateRefundBlock() {
+          const block   = document.getElementById('refund-order-block');
+          const amtSpan = document.getElementById('refund-order-amount');
+          const refundableStatuses = ['failed_provider', 'manual_review', 'failed'];
+          const userId = orderData.user_id || orderData.userid || null;
+          const alreadyRefunded = orderData.external_response?.refunded === true;
+          const eligible =
+            orderData.type === 'registered' &&
+            userId &&
+            refundableStatuses.includes(orderData.status) &&
+            !alreadyRefunded;
+
+          if (eligible) {
+            const amt = Math.abs(parseFloat(orderData.amount || 0));
+            amtSpan.textContent = `GH₵${amt.toFixed(2)}`;
+            block.classList.remove('hidden');
+          } else {
+            block.classList.add('hidden');
+          }
+        })();
+
         // Rebuild status options to match server-side transition rules.
         (function populateStatusSelect(currentStatus) {
           const select = document.getElementById('status-update-select');
@@ -2298,6 +2419,45 @@ const statusColor =
       } catch (error) {
         console.error('Error updating order status:', error);
         showToast('Failed to update order status', 'error');
+      }
+    }
+
+    async function refundCurrentOrder() {
+      if (!state.currentOrderId) return;
+
+      const amtSpan = document.getElementById('refund-order-amount');
+      const confirmed = confirm(
+        `Refund ${amtSpan?.textContent || 'this amount'} to the customer's wallet?\n\n` +
+        `This cannot be undone from here — it will credit their wallet and mark the order as refunded.`
+      );
+      if (!confirmed) return;
+
+      const btn = document.getElementById('refund-order-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
+
+      try {
+        const res = await _adminFetch('admin-manage-orders', {
+          action: 'refund-order',
+          orderId: state.currentOrderId,
+        });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.message || 'Refund failed');
+
+        showToast(result.message || 'Order refunded', 'success');
+        closeModal('order-details-modal');
+
+        if (state.currentOrderType === 'guest') {
+          loadGuestOrders();
+        } else {
+          loadAllOrders();
+        }
+        loadDashboardData();
+        loadOrderStats();
+      } catch (error) {
+        console.error('Error refunding order:', error);
+        showToast(error.message || 'Failed to refund order', 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Refund Customer'; }
       }
     }
 
@@ -2710,6 +2870,50 @@ document.querySelectorAll('.admin-nav-btn').forEach(btn => {
           return;
         }
 
+        // ── CSP hardening: consolidated handler for former onclick="" ──────
+        // Every inline onclick in zprx.html / zprx-inline.js / zprx.js's own
+        // dynamic templates was converted to data-action (+ data-arg for a
+        // literal parameter, or a specific data-* for a dynamic one). Kept
+        // as one big delegated handler here rather than 43 separate
+        // listeners, matching the pattern already used above for checker
+        // admin actions.
+        const actionEl = target.closest('[data-action]');
+        if (actionEl) {
+          const action = actionEl.dataset.action;
+          const arg    = actionEl.dataset.arg;
+
+          switch (action) {
+            case 'navigate':               window.admin.navigateTo(arg); return;
+            case 'switch-deposit-tab':      switchDepositTab(arg); return;
+            case 'load-orphaned-payments':  window.admin.loadOrphanedPayments(); return;
+            case 'switch-orphan-tab':       window.admin.switchOrphanTab(arg); return;
+            case 'close-manual-order-modal': {
+              const modal = document.getElementById('manual-order-modal');
+              if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+              return;
+            }
+            case 'submit-manual-order':     window.admin.submitManualOrder(); return;
+            case 'check-sms-balance':       checkSMSBalance(); return;
+            case 'refresh-sms-providers':   loadSMSProviders(); return;
+            case 'switch-sms-provider':     switchSMSProvider(arg); return;
+            case 'switch-sms-tab':          switchSMSTab(arg); return;
+            case 'preview-sms-recipients':  previewSMSRecipients(); return;
+            case 'use-sms-template':        useSMSTemplate(arg); return;
+            case 'load-sms-logs':           loadSMSLogs(); return;
+            case 'load-user-profits':       window.admin.loadUserProfits(); return;
+            case 'switch-analytics-tab':    switchAnalyticsTab(arg); return;
+            case 'export-csv':              exportCSV(); return;
+            case 'export-pdf':              exportPDF(); return;
+            case 'load-security-logs':      loadSecurityLogs(); return;
+            case 'clear-security-logs':     clearSecurityLogs(); return;
+            case 'sec-logs-prev':           secLogsChangePage(-1); return;
+            case 'sec-logs-next':           secLogsChangePage(1); return;
+            case 'go-dashboard':            window.location.href = 'dashboard.html'; return;
+            case 'reload-page':             window.location.reload(); return;
+            case 'revoke-api-key':          window.admin.revokeApiKey(actionEl.dataset.keyId); return;
+          }
+        }
+
         if (target.id === 'orders-next') {
           state.ordersPage++;
           renderOrders();
@@ -2879,6 +3083,12 @@ document.querySelectorAll('.admin-nav-btn').forEach(btn => {
         if (target.id === 'update-order-status') {
           const newStatus = document.getElementById('status-update-select').value;
           updateOrderStatus(newStatus);
+          return;
+        }
+
+        // Refund order
+        if (target.id === 'refund-order-btn') {
+          refundCurrentOrder();
           return;
         }
 
@@ -3067,7 +3277,7 @@ if (target.closest('#logout-btn')) {
               </div>
               <h2 style="font-size:1.25rem;font-weight:700;color:#1e293b;margin-bottom:0.5rem;">Access Denied</h2>
               <p style="font-size:0.875rem;color:#64748b;margin-bottom:1.5rem;">You do not have admin privileges.</p>
-              <button onclick="window.location.href='dashboard.html'"
+              <button data-action="go-dashboard"
                 style="display:inline-flex;align-items:center;gap:0.5rem;background:#0284c7;color:#fff;font-weight:600;font-size:0.875rem;padding:0.75rem 1.5rem;border-radius:0.5rem;border:none;cursor:pointer;">
                 <i class="fas fa-arrow-left" style="font-size:0.8rem;"></i>
                 Go to User Dashboard
@@ -3141,7 +3351,7 @@ if (target.closest('#logout-btn')) {
             <p class="text-slate-500 text-sm mb-4">${
               error.message || 'Unknown error'
             }</p>
-            <button onclick="window.location.reload()" class="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
+            <button data-action="reload-page" class="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
               Refresh Page
             </button>
           </div>
@@ -4166,7 +4376,7 @@ let currentWithdrawalFilter = 'pending';
             ? `<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Active</span>`
             : `<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Revoked</span>`;
           const revokeBtn = isActive
-            ? `<button onclick="admin.revokeApiKey('${esc(k.id)}')"
+            ? `<button data-action="revoke-api-key" data-key-id="${esc(k.id)}"
                  class="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors">
                  <i class="fas fa-times-circle mr-1"></i>Revoke
                </button>`
@@ -4930,6 +5140,17 @@ rejectWithdrawal: async function(id) {
 
           if (!result.success) {
             showLoginError(result.error || 'Invalid credentials.');
+            return;
+          }
+
+          // If the server didn't ask for an OTP step, the login is already
+          // complete — either no phone is on file, or this browser is a
+          // trusted device and OTP was skipped. Go straight to the portal
+          // instead of showing an OTP box with nothing to verify.
+          if (result.step !== 'otp-sent') {
+            document.getElementById('admin-login-panel').classList.add('hidden');
+            document.getElementById('admin-spinner').classList.remove('hidden');
+            admin.init();
             return;
           }
 
@@ -5959,6 +6180,16 @@ rejectWithdrawal: async function(id) {
       set('analytics-orders-week',    data.ordersThisWeek);
       set('analytics-avg-order',      formatCurrency(data.avgOrderValue));
     }
+
+    // Moved from an inline <script> block (CSP hardening) — sets the daily
+    // chart container's height responsively. Unchanged logic, just relocated.
+    function setAnalyticsDailyChartHeight() {
+      const el = document.getElementById('analytics-daily-container');
+      if (!el) return;
+      el.style.height = window.innerWidth < 640 ? '240px' : '340px';
+    }
+    setAnalyticsDailyChartHeight();
+    window.addEventListener('resize', setAnalyticsDailyChartHeight);
 
     function renderDailyChart(daily, days) {
       const canvas  = document.getElementById('analytics-daily-chart');

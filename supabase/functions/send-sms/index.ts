@@ -1,5 +1,18 @@
+// ============================================================
+// supabase/functions/send-sms/index.ts
+// ============================================================
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  SMS_PROVIDERS,
+  SMS_PROVIDER_SETTING_KEY,
+  getActiveSmsProvider,
+  getSmsBalance,
+  isProviderConfigured,
+  isSmsProviderId,
+  sendSms,
+  type SmsProviderId,
+} from "../_shared/sms-provider.ts";
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 const CORS = {
@@ -13,80 +26,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...CORS, "Content-Type": "application/json" },
   });
-}
-
-// ─── Arkesel v1 API helpers ────────────────────────────────────────────────────
-const ARKESEL_BASE = "https://sms.arkesel.com/sms/api";
-
-async function arkeselSend(
-  apiKey: string,
-  sender: string,
-  recipients: string[],
-  message: string,
-): Promise<{ success: boolean; message: string; data?: unknown }> {
-  const to = recipients.join(",");
-  const url = new URL(ARKESEL_BASE);
-  url.searchParams.set("action",   "send-sms");
-  url.searchParams.set("api_key",  apiKey);
-  url.searchParams.set("to",       to);
-  url.searchParams.set("from",     sender);
-  url.searchParams.set("sms",      message);
-  url.searchParams.set("response", "json");
-
-  const res  = await fetch(url.toString());
-  const raw  = await res.text();
-  console.log("📤 Arkesel send raw response:", raw);
-
-  let data: any = {};
-  try { data = JSON.parse(raw); } catch { data = { status: raw.trim() }; }
-
-  const statusStr = (data?.status || "").toString().toUpperCase();
-  const messageStr = (data?.message || "").toString().toLowerCase();
-  const isSuccess =
-    statusStr === "OK" ||
-    statusStr === "SUCCESS" ||
-    messageStr.includes("successfully sent") ||
-    messageStr.includes("success") ||
-    (res.ok && !data?.error && statusStr !== "ERROR" && statusStr !== "FAILED");
-
-  if (isSuccess) {
-    return { success: true, message: "SMS sent successfully", data };
-  }
-
-  return {
-    success: false,
-    message: data?.message || data?.status || raw || `Arkesel error (HTTP ${res.status})`,
-    data,
-  };
-}
-
-async function arkeselBalance(
-  apiKey: string,
-): Promise<{ success: boolean; balance?: string; message: string }> {
-  const url = new URL(ARKESEL_BASE);
-  url.searchParams.set("action",   "check-balance");
-  url.searchParams.set("api_key",  apiKey);
-  url.searchParams.set("response", "json");
-
-  const res = await fetch(url.toString());
-  const raw = await res.text();
-  console.log("💰 Arkesel balance raw response:", raw);
-
-  let data: any = {};
-  try { data = JSON.parse(raw); } catch { data = { status: raw.trim() }; }
-
-  if (data?.balance !== undefined && data?.balance !== null) {
-    return { success: true, balance: String(data.balance), message: "OK" };
-  }
-
-  if ((data?.status || "").toString().toUpperCase() === "OK") {
-    return { success: true, balance: String(data?.balance ?? "N/A"), message: "OK" };
-  }
-
-  return {
-    success: false,
-    message: data?.message || data?.status || raw || `Could not fetch balance (HTTP ${res.status})`,
-  };
 }
 
 // ─── Fetch recipients by target audience ─────────────────────────────────────
@@ -183,14 +122,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ success: false, message: "Method not allowed" }, 405);
 
-  const ARKESEL_API_KEY   = Deno.env.get("ARKESEL_API_KEY")?.trim();
-  const ARKESEL_SENDER_ID = Deno.env.get("ARKESEL_SENDER_ID") ?? "ESTECH";
-  const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
-  const SUPABASE_SRK      = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-  if (!ARKESEL_API_KEY) {
-    return json({ success: false, message: "SMS service not configured. Contact admin." }, 500);
-  }
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SUPABASE_SRK = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
   // ── Verify admin auth ──────────────────────────────────────────────────────
   // ── Internal secret — only admin-proxy knows this value ─────────────────
@@ -210,6 +143,7 @@ serve(async (req) => {
   // ── Parse body ─────────────────────────────────────────────────────────────
   let body: {
     action?: string;
+    provider?: string;
     recipients?: string[];
     message?: string;
     target?: {
@@ -227,12 +161,83 @@ serve(async (req) => {
     return json({ success: false, message: "Invalid JSON body" }, 400);
   }
 
-  const { action, recipients, message, target } = body;
+  const { action, recipients, message, target, provider: requestedProvider } = body;
 
   // ── balance ────────────────────────────────────────────────────────────────
   if (action === "balance") {
-    const result = await arkeselBalance(ARKESEL_API_KEY);
-    return json(result);
+    // Defaults to the active provider; admins may ask for a specific one.
+    let target_provider: SmsProviderId;
+    if (requestedProvider !== undefined && requestedProvider !== null && requestedProvider !== "") {
+      if (!isSmsProviderId(requestedProvider)) {
+        return json({ success: false, message: "Unknown SMS provider" }, 400);
+      }
+      target_provider = requestedProvider;
+    } else {
+      target_provider = await getActiveSmsProvider(supabase);
+    }
+    const result = await getSmsBalance(target_provider);
+    return json({ ...result, providerLabel: SMS_PROVIDERS[target_provider].label });
+  }
+
+  // ── provider-status: active provider + per-provider config/balance ─────────
+  if (action === "provider-status") {
+    const active = await getActiveSmsProvider(supabase);
+    const ids = Object.keys(SMS_PROVIDERS) as SmsProviderId[];
+    const providers = await Promise.all(ids.map(async (id) => {
+      const configured = isProviderConfigured(id);
+      const bal = configured ? await getSmsBalance(id) : null;
+      return {
+        id,
+        label:      SMS_PROVIDERS[id].label,
+        configured,
+        active:     id === active,
+        balance:    bal?.success ? bal.balance : null,
+        // Provider error text is safe to show to an admin; secrets are never included.
+        balanceError: bal && !bal.success ? bal.message : null,
+      };
+    }));
+    return json({ success: true, active, activeLabel: SMS_PROVIDERS[active].label, providers });
+  }
+
+  // ── set-provider: manual switch (admin / superadmin only — enforced above) ─
+  if (action === "set-provider") {
+    if (!isSmsProviderId(requestedProvider)) {
+      return json({ success: false, message: "Unknown SMS provider" }, 400);
+    }
+    if (!isProviderConfigured(requestedProvider)) {
+      return json({
+        success: false,
+        message: `${SMS_PROVIDERS[requestedProvider].label} is not configured, so it cannot be activated. Set ${SMS_PROVIDERS[requestedProvider].secrets} first.`,
+      }, 400);
+    }
+
+    const previous = await getActiveSmsProvider(supabase);
+    const { error: upsertErr } = await supabase
+      .from("system_settings")
+      .upsert(
+        { key: SMS_PROVIDER_SETTING_KEY, value: requestedProvider, updated_at: new Date().toISOString() },
+        { onConflict: "key" },
+      );
+    if (upsertErr) {
+      console.error("set-provider upsert failed:", upsertErr.message);
+      return json({ success: false, message: "Could not save the provider setting" }, 500);
+    }
+
+    await supabase.from("admin_audit_log").insert({
+      admin_id:   user.id,
+      action:     "sms_provider_switch",
+      details:    { from: previous, to: requestedProvider },
+      created_at: new Date().toISOString(),
+    }).then(({ error }) => {
+      if (error) console.warn("Audit log failed (non-fatal):", error.message);
+    });
+
+    return json({
+      success: true,
+      active:  requestedProvider,
+      activeLabel: SMS_PROVIDERS[requestedProvider].label,
+      message: `SMS provider switched to ${SMS_PROVIDERS[requestedProvider].label}`,
+    });
   }
 
   // ── preview: resolve recipients without sending ───────────────────────────
@@ -268,9 +273,19 @@ serve(async (req) => {
       return json({ success: false, message: "No valid recipients found" }, 400);
     }
 
-    console.log(`📨 Admin ${user.id} sending SMS to ${finalRecipients.length} recipient(s)`);
+    // Every SMS goes through the provider the admin has activated — no fallback.
+    const activeProvider = await getActiveSmsProvider(supabase);
+    console.log(`📨 Admin ${user.id} sending SMS to ${finalRecipients.length} recipient(s) via ${activeProvider}`);
 
-    const result = await arkeselSend(ARKESEL_API_KEY, ARKESEL_SENDER_ID, finalRecipients, message.trim());
+    if (!isProviderConfigured(activeProvider)) {
+      return json({
+        success: false,
+        provider: activeProvider,
+        message: `${SMS_PROVIDERS[activeProvider].label} is the active provider but is not configured. Switch provider or set ${SMS_PROVIDERS[activeProvider].secrets}.`,
+      }, 500);
+    }
+
+    const result = await sendSms(activeProvider, finalRecipients, message.trim());
 
     // Audit log
     await supabase.from("sms_logs").insert({
@@ -278,7 +293,7 @@ serve(async (req) => {
       recipients: finalRecipients,
       message:    message.trim(),
       success:    result.success,
-      provider:   "arkesel",
+      provider:   result.provider,
       target_type: target?.type ?? "manual",
       recipient_count: finalRecipients.length,
       response:   result.data ?? { message: result.message },
@@ -286,7 +301,13 @@ serve(async (req) => {
       if (error) console.warn("⚠️ sms_logs insert failed (non-fatal):", error.message);
     });
 
-    return json({ ...result, recipientCount: finalRecipients.length });
+    return json({
+      success: result.success,
+      message: result.message,
+      provider: result.provider,
+      providerLabel: SMS_PROVIDERS[result.provider].label,
+      recipientCount: finalRecipients.length,
+    });
   }
 
   // ── logs ───────────────────────────────────────────────────────────────────
@@ -295,7 +316,7 @@ serve(async (req) => {
 
     const { data: logs, error: logsError } = await supabase
       .from("sms_logs")
-      .select("id, sent_by, message, success, target_type, recipient_count, created_at")
+      .select("id, sent_by, message, success, target_type, recipient_count, provider, created_at")
       .order("created_at", { ascending: false })
       .limit(limit);
 

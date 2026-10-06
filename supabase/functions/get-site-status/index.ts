@@ -15,6 +15,7 @@
 // }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit, getClientIp } from "../_shared/rate-limit.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin":  "*",
@@ -60,6 +61,13 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
+
+    // Called on every page load, so keep this generous — just a ceiling
+    // against actual flooding, not normal browsing.
+    const rate = await checkRateLimit(supabase, `public:get-site-status:${getClientIp(req)}`, 120, 60_000);
+    if (!rate.allowed) {
+      return json({ success: false, message: "Too many requests", retry_after_seconds: rate.retryAfter }, 429);
+    }
 
     // Fetch both lock settings in parallel
     const [dashRes, storeRes] = await Promise.all([

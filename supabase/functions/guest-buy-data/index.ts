@@ -14,7 +14,17 @@
  *       → upsert into guest_orders + adminorders with status='payment_pending'
  *       → return early (no provider call)
  *
- *   Normal fulfillment flow (after Paystack callback):
+ *   ⚠️ CORRECTED (Sep 2026 security review): the line below describing a second
+ *   "normal fulfillment" flow through THIS function is stale — it describes an
+ *   earlier design that was intentionally removed (see the "WEBHOOK-ONLY
+ *   FULFILLMENT MODE" block at the bottom of this file, which is the actual
+ *   current behavior and takes precedence over this paragraph). Any call with
+ *   status !== 'payment_pending' now just acknowledges and returns — it does
+ *   NOT call placeOrder() or fulfill anything. paystack-webhook is the only
+ *   function that ever places a real provider order. placeOrder() below is
+ *   dead code, kept only because removing it wasn't in scope for this review —
+ *   safe to delete once you've confirmed nothing else references it.
+ *   [STALE, kept for history — do not rely on this]:
  *     body.status !== 'payment_pending'
  *       → idempotency check → upgrade payment_pending record → place provider order
  *
@@ -64,6 +74,7 @@
  */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit, getClientIp } from "../_shared/rate-limit.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -72,7 +83,7 @@ const CORS = {
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
-type Provider = "justicedata" | "pensite" | "hubnet" | "sparkdata" | "databosshub" | "up2u";
+type Provider = "justicedata" | "pensite" | "hubnet" | "sparkdata" | "databosshub" | "up2u" | "bundlezonegh";
 
 interface ProviderResult {
   success: boolean;
@@ -168,6 +179,15 @@ function mapNetworkUp2u(network: string): string {
   if (network === "mtn")        return "mtn";
   if (network === "telecel")    return "telecel";
   if (network === "airteltigo") return "airteltigo";
+  return network.toLowerCase();
+}
+
+// Bundle Zone GH's documented network keys are "mtn", "telecel", "ishare" —
+// airteltigo maps to "ishare", NOT "airteltigo".
+function mapNetworkBundleZoneGh(network: string): string {
+  if (network === "mtn")        return "mtn";
+  if (network === "telecel")    return "telecel";
+  if (network === "airteltigo") return "ishare";
   return network.toLowerCase();
 }
 
@@ -406,6 +426,48 @@ async function placeUp2uOrder(payload: OrderPayload): Promise<ProviderResult> {
   }
 }
 
+async function placeBundleZoneGhOrder(payload: OrderPayload): Promise<ProviderResult> {
+  const apiKey = Deno.env.get("BUNDLEZONEGH_API_KEY");
+  if (!apiKey) return { success: false, error: "Bundle Zone GH API key not configured" };
+
+  const networkKey = mapNetworkBundleZoneGh(payload.network);
+
+  try {
+    const response = await fetch("https://shisywgbcadfyfbcupve.supabase.co/functions/v1/developer-api", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action:       "place_order",
+        network:      networkKey,
+        recipient:    payload.phone,
+        package_size: payload.bundleSize,
+        order_id:     payload.orderId,
+      }),
+    });
+
+    let data: any = {};
+    try { data = await response.json(); } catch { /* non-JSON body, data stays {} */ }
+
+    if (!response.ok || data.success !== true) {
+      const errMsg = data.message || data.error || `HTTP ${response.status}`;
+      return { success: false, error: `BundleZoneGH error: ${errMsg}` };
+    }
+
+    return {
+      success: true,
+      data: {
+        ...data.data,
+        message:                 data.message || "Order placed successfully",
+        _provider:               "bundlezonegh",
+        _network_key:            networkKey,
+        _bundlezonegh_reference: data.data?.reference,
+      },
+    };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "BundleZoneGH unknown error" };
+  }
+}
+
 // ─── Single provider dispatcher ─────────────────────────────────────────────────
 async function dispatchToProvider(provider: Provider, payload: OrderPayload): Promise<ProviderResult> {
   switch (provider) {
@@ -414,6 +476,7 @@ async function dispatchToProvider(provider: Provider, payload: OrderPayload): Pr
     case "sparkdata":   return await placeSparkDataOrder(payload);
     case "databosshub": return await placeDataBossHubOrder(payload);
     case "up2u":        return await placeUp2uOrder(payload);
+    case "bundlezonegh": return await placeBundleZoneGhOrder(payload);
     case "justicedata":
     default:            return await placeJusticeDataOrder(payload);
   }
@@ -510,8 +573,21 @@ async function resolvePricing(
   let sellingPrice = baseCost;
 
   if (!storeOwnerId) {
-    sellingPrice = sellingPriceHint > 0 ? sellingPriceHint : baseCost;
-    console.log(`Guest pricing — selling:${sellingPrice} cost:${baseCost}`);
+    // SECURITY FIX (Sep 2026): this used to trust sellingPriceHint (the
+    // client-supplied `selling_price` field) outright for any value > 0,
+    // with zero validation against the real bundle price. Confirmed
+    // exploitable: a direct API call (bypassing the storefront UI) could
+    // register a pending order for an expensive bundle while claiming a
+    // near-zero selling_price, pay Paystack a matching tiny amount, and
+    // have the real bundle delivered — you'd pay the full provider cost
+    // for a payment that didn't cover it. Confirmed the real frontend
+    // (index-main.js) never sends selling_price for guest purchases at
+    // all, only `amount` — so ignoring the hint entirely changes nothing
+    // for legitimate traffic and closes the hole completely. Guests now
+    // always pay the real DB-verified bundle price, same as every other
+    // purchase path in this codebase ("price always from DB").
+    sellingPrice = baseCost;
+    console.log(`Guest pricing — selling:${sellingPrice} cost:${baseCost} (client hint ignored: ${sellingPriceHint})`);
     return { sellingPrice, baseCost };
   }
 
@@ -605,6 +681,24 @@ serve(async (req) => {
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return fail("Server configuration error", 500);
 
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  // ── Rate limiting (IP-based — no login required for this endpoint) ─────────
+  // Checked before any body parsing so a flood is rejected as cheaply as
+  // possible. This endpoint processes a real purchase with no account
+  // required, making it the highest-risk target for a "denial of wallet"
+  // style flood — kept tight (5/min, 15/hour) relative to the logged-in
+  // buy-data limit in user-proxy.
+  const clientIp = getClientIp(req);
+  const perMinute = await checkRateLimit(supabase, `guest-buy-data:min:${clientIp}`, 5, 60_000);
+  if (!perMinute.allowed) {
+    return fail(`Too many requests. Try again in ${perMinute.retryAfter}s.`, 429);
+  }
+  const perHour = await checkRateLimit(supabase, `guest-buy-data:hour:${clientIp}`, 15, 60 * 60_000);
+  if (!perHour.allowed) {
+    return fail(`Hourly request limit reached. Try again in ${Math.ceil((perHour.retryAfter ?? 0) / 60)} min.`, 429);
+  }
+
   let body: {
     network: string;
     phone: string;
@@ -636,6 +730,15 @@ serve(async (req) => {
   if (!amount)            return fail("Missing amount");
   if (!payment_reference) return fail("Missing payment reference");
 
+  // Both were previously accepted with no validation at all — cheap,
+  // correct defense-in-depth regardless of how they're rendered downstream.
+  if (guest_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(guest_email))) {
+    return fail("Invalid guest email format");
+  }
+  if (guest_phone && !/^[0-9+\s\-()]{7,20}$/.test(String(guest_phone))) {
+    return fail("Invalid guest phone format");
+  }
+
   const VALID_NETWORKS    = ["mtn", "telecel", "airteltigo"];
   const normalizedNetwork = String(network).toLowerCase();
   if (!VALID_NETWORKS.includes(normalizedNetwork)) {
@@ -666,8 +769,6 @@ serve(async (req) => {
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRe.test(storeOwnerId)) return fail("Invalid store owner ID format");
   }
-
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   // ── [FIX-1] PRE-REGISTRATION PATH ───────────────────────────────────────────
   // store.html calls this BEFORE opening Paystack with status='payment_pending'.

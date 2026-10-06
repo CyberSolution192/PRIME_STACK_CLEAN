@@ -8,7 +8,7 @@ const corsHeaders = {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Provider = 'justicedata' | 'pensite' | 'hubnet' | 'sparkdata' | 'databosshub' | 'up2u';
+type Provider = 'justicedata' | 'pensite' | 'hubnet' | 'sparkdata' | 'databosshub' | 'up2u' | 'bundlezonegh';
 
 interface ProviderResult {
   success: boolean;
@@ -86,6 +86,15 @@ function mapNetworkUp2u(network: string): string {
   if (network === 'mtn')        return 'mtn';
   if (network === 'telecel')    return 'telecel';
   if (network === 'airteltigo') return 'airteltigo';
+  return network.toLowerCase();
+}
+
+// Bundle Zone GH's documented network keys are "mtn", "telecel", "ishare" —
+// note airteltigo maps to "ishare", NOT "airteltigo".
+function mapNetworkBundleZoneGh(network: string): string {
+  if (network === 'mtn')        return 'mtn';
+  if (network === 'telecel')    return 'telecel';
+  if (network === 'airteltigo') return 'ishare';
   return network.toLowerCase();
 }
 
@@ -338,6 +347,55 @@ async function placeUp2uOrder(payload: OrderPayload): Promise<ProviderResult> {
   }
 }
 
+// ─── Provider: Bundle Zone GH ─────────────────────────────────────────────────
+async function placeBundleZoneGhOrder(payload: OrderPayload): Promise<ProviderResult> {
+  const apiKey = Deno.env.get("BUNDLEZONEGH_API_KEY");
+  if (!apiKey) return { success: false, error: "Bundle Zone GH API key not configured" };
+
+  const networkKey = mapNetworkBundleZoneGh(payload.network);
+  // Bundle Zone GH expects package_size in GB directly — no unit conversion needed.
+
+  try {
+    console.log(`[BundleZoneGH] Placing order ${payload.orderId} — ${payload.network} ${payload.bundleSize}GB -> ${payload.phone}`);
+    const response = await fetch("https://shisywgbcadfyfbcupve.supabase.co/functions/v1/developer-api", {
+      method: 'POST',
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action:       'place_order',
+        network:      networkKey,
+        recipient:    payload.phone,
+        package_size: payload.bundleSize,
+        order_id:     payload.orderId,
+      })
+    });
+
+    let data: any = {};
+    try { data = await response.json(); } catch { /* non-JSON body, data stays {} */ }
+
+    if (!response.ok || data.success !== true) {
+      // Docs only describe a plain {success:false, error, message} envelope for
+      // every failure case (401 invalid key, 400 insufficient balance / bad phone /
+      // bundle not found) — key off the body rather than guessing at HTTP codes.
+      const errMsg = data.message || data.error || `HTTP ${response.status}`;
+      return { success: false, error: `BundleZoneGH error: ${errMsg}` };
+    }
+
+    console.log(`[BundleZoneGH] Success:`, JSON.stringify(data));
+    return {
+      success: true,
+      data: {
+        ...data.data,
+        message:              data.message || 'Order placed successfully',
+        _provider:             'bundlezonegh',
+        _network_key:          networkKey,
+        _bundlezonegh_reference: data.data?.reference, // their ref — kept for future reconciliation lookups
+      },
+    };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'BundleZoneGH unknown error' };
+  }
+}
+
 // ─── Active Provider Dispatcher ───────────────────────────────────────────────
 async function placeOrder(
   supabase: any,
@@ -370,6 +428,9 @@ async function placeOrder(
       break;
     case 'up2u':
       result = await placeUp2uOrder(payload);
+      break;
+    case 'bundlezonegh':
+      result = await placeBundleZoneGhOrder(payload);
       break;
     case 'justicedata':
     default:
@@ -625,6 +686,32 @@ await supabase
    const apiSuccess     = orderResult.success;
 const activeProvider = orderResult.provider;
 
+// ── Real provider cost lookup ──────────────────────────────────────────────
+// `basePrice` above is bundles.price — your admin-set SELLING price, not what
+// any provider actually charges you. The true wholesale cost (kept fresh by
+// sync-bundle-costs) lives in provider_bundle_costs, keyed by provider —
+// look it up now that we know which provider filled this order, and use it
+// for profit instead of comparing selling price against itself.
+let providerCost: number | null = null;
+try {
+  const { data: costRow } = await supabase
+    .from('provider_bundle_costs')
+    .select('cost_price')
+    .eq('provider', activeProvider)
+    .eq('network', network.toLowerCase())
+    .eq('size_gb', bundleSize)
+    .eq('validity', 'monthly')
+    .maybeSingle();
+  if (costRow) providerCost = parseFloat(String(costRow.cost_price));
+} catch (e) {
+  console.warn('provider_bundle_costs lookup failed:', e instanceof Error ? e.message : e);
+}
+const costSource = providerCost !== null ? 'provider_synced' : 'estimated_fallback';
+if (costSource === 'estimated_fallback') {
+  console.warn(`[${activeProvider}] No synced cost for ${network} ${bundleSize}GB — profit is an ESTIMATE using selling price as cost.`);
+}
+const effectiveCost = providerCost ?? basePrice;
+
 const providerErrorText = String(
   orderResult.error || ''
 ).toLowerCase();
@@ -661,6 +748,8 @@ if (!apiSuccess) {
         bundle_size: bundleSize,
         bundle_price: finalPrice,
         base_price: basePrice,
+        provider_cost: providerCost,
+        cost_source: costSource,
         price_source: priceSource,
         order_id,
         provider: activeProvider,
@@ -690,8 +779,10 @@ if (!apiSuccess) {
         provider_response: apiSuccess ? orderResult.data : undefined,
         provider_error: !apiSuccess ? orderResult.error : undefined,
         base_cost:     basePrice,
+        provider_cost: providerCost,
+        cost_source:   costSource,
         selling_price: finalPrice,
-        profit:        parseFloat((finalPrice - basePrice).toFixed(2)),
+        profit:        parseFloat((finalPrice - effectiveCost).toFixed(2)),
         price_source:  priceSource,
         flagged_at:    !apiSuccess ? new Date().toISOString() : undefined
            }
