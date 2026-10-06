@@ -2,15 +2,15 @@
   "name": "primeconnect-dashboard",
   "version": "1.0.0",
   "description": "Production-ready dashboard for Prime Connect",
-  "main": "dist/index.html",
+  "main": "index.html",
   "scripts": {
-    "build": "tailwindcss -i ./src/styles.css -o ./dist/styles.css --minify && cp *.html dist/ && cp *.js dist/ && cp service-worker.js dist/",
-    "dev": "tailwindcss -i ./src/styles.css -o ./dist/styles.css --watch",
-    "start": "cd dist && python -m http.server 8000",
-    "clean": "rm -rf dist",
+    "build": "tailwindcss -i ./src/input.css -o ./dist/app.css --minify",
+    "dev": "tailwindcss -i ./src/input.css -o ./dist/app.css --watch",
+    "start": "python3 -m http.server 8000",
+    "clean": "rm -f dist/app.css",
     "prebuild": "mkdir -p dist",
-    "deploy": "npm run build && echo 'Build complete. Upload the dist/ folder to your web server.'",
-    "test": "npm run build && echo 'Build test passed. Check dist/ folder for output.'"
+    "deploy": "npm run build && echo 'Build complete. Deploy the project root (index.html, dist/, *.js) to your web server.'",
+    "test": "npm run build && echo 'Build test passed. dist/app.css regenerated.'"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.44.0"
