@@ -110,6 +110,13 @@ function parseJson(raw: string): Record<string, any> {
   }
 }
 
+/** Short, single-line, tag-free excerpt of a provider response; the API key is redacted. */
+function snippet(raw: string, secret?: string): string {
+  let t = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (secret) t = t.split(secret).join('***');
+  return t.slice(0, 160);
+}
+
 /** 233XXXXXXXXX → 0XXXXXXXXX (the format BMS documents). Anything else passes through. */
 function toLocalGhana(msisdn: string): string {
   return msisdn.startsWith('233') && msisdn.length === 12 ? '0' + msisdn.slice(3) : msisdn;
@@ -211,12 +218,15 @@ async function bmsSend(cfg: ProviderConfig, recipients: string[], message: strin
       });
       const raw  = await res.text();
       const data = parseJson(raw);
-      console.log('[sms-provider] bms send http', res.status, 'status', data?.status, 'code', data?.code);
+      const excerpt = snippet(raw, cfg.apiKey);
+      console.log('[sms-provider] bms send http', res.status, 'content-type', res.headers.get('content-type'),
+                  'status', data?.status, 'code', data?.code, 'body:', excerpt || '(empty)');
       responses.push(data);
       if (bmsIsSuccess(data, res.ok)) {
         okBatches++;
       } else if (!firstError) {
-        firstError = (data?.message || data?.status || `BMS Africa error (HTTP ${res.status})`).toString();
+        const reason = (data?.message || (typeof data?.status === 'string' ? data.status : '') || excerpt || '').toString();
+        firstError = `BMS Africa error (HTTP ${res.status})${reason ? ': ' + reason.slice(0, 160) : ''}`;
       }
     } catch (e) {
       if (!firstError) firstError = `BMS Africa request failed: ${(e as Error).name === 'AbortError' ? 'timed out' : (e as Error).message}`;
