@@ -36,7 +36,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL      = 'https://rpolemxgussziexdmdxe.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwb2xlbXhndXNzemlleGRtZHhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwMjcxNjMsImV4cCI6MjA4NTYwMzE2M30.y6W9tq6X_XG7x5DYwAi-s1m83DNyVoh9fxDIOUcI8eM';
 
-export const PAYSTACK_PUBLIC_KEY  = 'pk_live_ab6a5a8a637a287d763a910af6e44136f779a93b';
+export const PAYSTACK_PUBLIC_KEY  = 'pk_live_c7731eca80e7f852204e467743791b5946c71fd6';
 
 // ── Paystack settlement routing ─────────────────────────────────────────────
 // A domain listed here settles to its own Paystack subaccount; any domain NOT
@@ -46,7 +46,7 @@ export const PAYSTACK_PUBLIC_KEY  = 'pk_live_ab6a5a8a637a287d763a910af6e44136f77
 // Keep PAYSTACK_ROUTING_ENABLED = false until the main account is the Richson
 // account (its public key above, its secret key and webhook on the server).
 // Turning it on earlier would make payments on a routed domain fail.
-export const PAYSTACK_ROUTING_ENABLED = false;
+export const PAYSTACK_ROUTING_ENABLED = true;
 
 // Domains that share this backend. A store always lives on its owner's domain (see store-main.js).
 export const KNOWN_DOMAINS = ['primeconnect.site', 'www.richsondatahub.store'];
