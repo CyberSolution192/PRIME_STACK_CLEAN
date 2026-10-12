@@ -52,7 +52,7 @@
  *
  * Provider switching:
  *   Reads 'active_provider' from system_settings ->
- *   justicedata | pensite | hubnet | sparkdata | databosshub
+ *   justicedata | dataspark | hubnet | sparkdata | databosshub
  *   Falls back to 'justicedata' if not set.
  *   If ALL providers fail, order is saved as 'pending' for manual processing.
  *
@@ -75,6 +75,8 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkRateLimit, getClientIp } from "../_shared/rate-limit.ts";
+import { sourceDomainFromRequest } from '../_shared/source-domain.ts';
+import { placeDatasparkOrder } from '../_shared/dataspark.ts';
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -83,7 +85,7 @@ const CORS = {
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
-type Provider = "justicedata" | "pensite" | "hubnet" | "sparkdata" | "databosshub" | "up2u" | "bundlezonegh";
+type Provider = "justicedata" | "dataspark" | "hubnet" | "sparkdata" | "databosshub" | "up2u" | "bundlezonegh";
 
 interface ProviderResult {
   success: boolean;
@@ -147,13 +149,6 @@ function mapNetworkJusticeData(network: string, size: number): string {
   return network.toUpperCase();
 }
 
-function mapNetworkPensite(network: string, size: number): string {
-  if (network === "mtn")        return "YELLO";
-  if (network === "telecel")    return "TELECEL";
-  if (network === "airteltigo") return size >= 15 ? "AT_BIGTIME" : "AT_PREMIUM";
-  return network.toUpperCase();
-}
-
 function mapNetworkHubnet(network: string, size: number): string {
   if (network === "mtn")        return "mtn";
   if (network === "telecel")    return "telecel";
@@ -214,32 +209,6 @@ async function placeJusticeDataOrder(payload: OrderPayload): Promise<ProviderRes
     return { success: true, data: { ...data, _provider: "justicedata", _network_key: networkKey } };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "JusticeData unknown error" };
-  }
-}
-
-// ─── Provider: Pensite ──────────────────────────────────────────────────────────
-async function placePensiteOrder(payload: OrderPayload): Promise<ProviderResult> {
-  const apiKey = Deno.env.get("PENSITE_API_KEY");
-  if (!apiKey) return { success: false, error: "Pensite API key not configured" };
-
-  const networkKey = mapNetworkPensite(payload.network, payload.bundleSize);
-  try {
-    console.log(`[Pensite] ${payload.orderId} — ${payload.network} ${payload.bundleSize}GB -> ${payload.phone}`);
-    const res = await fetch("https://pensitegh.com/api/purchase", {
-      method: "POST",
-      headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ networkKey, recipient: payload.phone, capacity: payload.bundleSize }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      return { success: false, error: `Pensite HTTP ${res.status}: ${text}` };
-    }
-    const data = await res.json();
-    if (data.status !== "success") return { success: false, error: `Pensite error: ${data.message ?? "unknown"}` };
-    console.log(`[Pensite] Success:`, JSON.stringify(data));
-    return { success: true, data: { ...data, _provider: "pensite", _network_key: networkKey } };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : "Pensite unknown error" };
   }
 }
 
@@ -471,7 +440,7 @@ async function placeBundleZoneGhOrder(payload: OrderPayload): Promise<ProviderRe
 // ─── Single provider dispatcher ─────────────────────────────────────────────────
 async function dispatchToProvider(provider: Provider, payload: OrderPayload): Promise<ProviderResult> {
   switch (provider) {
-    case "pensite":     return await placePensiteOrder(payload);
+    case "dataspark":     return await placeDatasparkOrder(payload);
     case "hubnet":      return await placeHubnetOrder(payload);
     case "sparkdata":   return await placeSparkDataOrder(payload);
     case "databosshub": return await placeDataBossHubOrder(payload);
@@ -781,6 +750,7 @@ serve(async (req) => {
     const { error: guestPreErr } = await supabase
       .from("guest_orders")
      .upsert({
+      source_domain: sourceDomainFromRequest(req),
   order_reference:   preOrderRef,
   payment_reference,
   network:           normalizedNetwork,
@@ -803,6 +773,7 @@ serve(async (req) => {
     const { error: adminPreErr } = await supabase
       .from("adminorders")
       .upsert({
+      source_domain: sourceDomainFromRequest(req),
         order_reference:   preOrderRef,
         payment_reference,
         network:           normalizedNetwork,
@@ -839,6 +810,7 @@ serve(async (req) => {
    await supabase
   .from("transactions")
   .upsert({
+      source_domain: sourceDomainFromRequest(req),
     userid: storeOwnerId,
 
     amount: -sellingPriceHint,

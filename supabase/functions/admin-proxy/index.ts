@@ -23,6 +23,7 @@
 import { serve }        from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { logSecurityEvent, getClientIp } from '../_shared/security-logger.ts';
+import { partnerAllowed } from '../_shared/partner-access.ts';
 
 const SUPABASE_URL      = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -48,6 +49,7 @@ const IS_PRODUCTION = Deno.env.get('ENVIRONMENT') === 'production';
 
 const ALLOWED_ORIGINS = new Set([
   "https://primeconnect.site",
+  "https://www.richsondatahub.store",
   "https://primestacktec.netlify.app",
 ]);
 
@@ -57,7 +59,7 @@ const ALLOWED_ORIGINS = new Set([
 // (5500, 5501, 5503, ...) constantly falls out of date and silently breaks
 // CORS with the sentinel 'https://no-cors-for-you' origin. This regex covers
 // every local dev port without needing to edit + redeploy each time.
-const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):\d+$/;
+const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):55\d\d$/;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -112,7 +114,7 @@ function json(
 async function validateAdminSession(
   cookieHeader: string,
   sessionIdHeader: string,
-): Promise<{ access_token: string; user_id: string; role: string } | null> {
+): Promise<{ access_token: string; user_id: string; role: string; partner_domain?: string } | null> {
   const sessionId =
     parseCookie(cookieHeader, SESSION_COOKIE) || sessionIdHeader || null;
   if (!sessionId) return null;
@@ -120,7 +122,7 @@ async function validateAdminSession(
   const db = serviceClient();
   const { data: session, error } = await db
     .from('admin_sessions')
-    .select('access_token, refresh_token, expires_at, user_id, role')
+    .select('access_token, refresh_token, expires_at, user_id, role, otp_pending')
     .eq('session_id', sessionId)
     .single();
 
@@ -132,10 +134,37 @@ async function validateAdminSession(
     return null;
   }
 
-  // Enforce admin/superadmin role — never forward requests for regular users
-  if (session.role !== 'admin' && session.role !== 'superadmin') {
+  // A session whose one-time code has not been verified yet is NOT a logged-in session.
+  if (session.otp_pending) {
+    console.warn('[admin-proxy] Session used before OTP verification was completed');
+    return null;
+  }
+
+  // Enforce admin/superadmin/partner role — never forward requests for regular users
+  if (session.role !== 'admin' && session.role !== 'superadmin' && session.role !== 'partner') {
     console.warn(`[admin-proxy] Non-admin role attempted access: ${session.role}`);
     return null;
+  }
+
+  // The account's CURRENT role is read from the database on every request, so a promotion,
+  // demotion or removal takes effect immediately — not hours later when the session expires.
+  // A partner is also tied to ONE domain, read from the same row.
+  const { data: acct } = await db
+    .from('users')
+    .select('role, partner_domain')
+    .eq('id', session.user_id)
+    .maybeSingle();
+  if (!acct || acct.role !== session.role) {
+    console.warn(`[admin-proxy] Role changed since login (session ${session.role}, now ${acct?.role ?? 'none'}) — rejected`);
+    return null;
+  }
+  let partnerDomain: string | undefined;
+  if (session.role === 'partner') {
+    if (!acct.partner_domain) {
+      console.warn('[admin-proxy] Partner session without a partner domain — rejected');
+      return null;
+    }
+    partnerDomain = acct.partner_domain as string;
   }
 
   // Proactively refresh the access token if within 5 minutes of JWT expiry
@@ -171,9 +200,10 @@ async function validateAdminSession(
   }
 
   return {
-    access_token: accessToken,
-    user_id:      session.user_id,
-    role:         session.role,
+    access_token:   accessToken,
+    user_id:        session.user_id,
+    role:           session.role,
+    partner_domain: partnerDomain,
   };
 }
 
@@ -249,6 +279,21 @@ serve(async (req: Request) => {
     return json({ error: 'Invalid JSON body' }, 400, {}, req);
   }
 
+  // ── 3b. Partner accounts: allowlisted actions only, locked to their domain ──
+  // The domain is taken from the database (above), never from the request. Any
+  // "domain" the browser sent is overwritten, and the target functions enforce
+  // the same rules again.
+  let partnerDomainHeader = '';
+  if (sessionData.role === 'partner') {
+    const action = (requestBody as Record<string, unknown> | null)?.action;
+    if (!sessionData.partner_domain || !partnerAllowed(targetFn, action)) {
+      logSecurityEvent({ severity: 'HIGH', event_type: 'partner_action_denied', action: `${targetFn}:${String(action)}`, ip_address: getClientIp(req), details: { user_id: sessionData.user_id }, source_function: 'admin-proxy' });
+      return json({ success: false, error: 'Not permitted for this account' }, 403, {}, req);
+    }
+    partnerDomainHeader = sessionData.partner_domain;
+    requestBody = { ...(requestBody as Record<string, unknown>), domain: sessionData.partner_domain };
+  }
+
   // ── 4. Forward to target function with injected bearer token ───────────────
   let targetRes: Response;
   try {
@@ -273,6 +318,7 @@ serve(async (req: Request) => {
         'apikey':              SERVICE_ROLE_KEY,
         'x-admin-user-id':     sessionData.user_id,
         'x-admin-role':        sessionData.role,
+        'x-admin-domain':      partnerDomainHeader,
         'x-session-id':        cookieSessionId ?? '',
         'x-internal-secret':   Deno.env.get('ADMIN_INTERNAL_SECRET') ?? '',
       },

@@ -24,6 +24,7 @@
 // POST body: { code: "bece" | "wassce" | "shs_placement", index_number?: string }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sourceDomainFromRequest, sourceDomainForUser } from '../_shared/source-domain.ts';
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -261,6 +262,7 @@ Deno.serve(async (req) => {
     const description = `${product.name} Purchase`;
 
     await supabase.from("checker_orders").upsert({
+      source_domain: sourceDomainFromRequest(req) ?? await sourceDomainForUser(supabase, user_id),
       order_reference: order_id,
       user_id,
       product_id: product.id,

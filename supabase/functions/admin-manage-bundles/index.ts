@@ -1,10 +1,4 @@
-const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
-
-  const { user } = await verifyAdmin(supabase, req);
-  if (!user) return json({ success: false, message: "Forbidden: admin access required" }, 403);/**
+/**
  * admin-manage-bundles — Replaces direct bundle CRUD in admin.html
  *
  * FIXES:

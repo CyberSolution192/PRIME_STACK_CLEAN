@@ -23,6 +23,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateName } from "../_shared/input-sanitize.ts";
 import { checkRateLimit, getClientIp } from "../_shared/rate-limit.ts";
+import { sourceDomainFromRequest } from '../_shared/source-domain.ts';
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -104,6 +105,7 @@ serve(async (req) => {
     const { error: updateError } = await supabase
       .from("users")
       .update({
+      source_domain: sourceDomainFromRequest(req),
         fullname,
         phone,
         updated_at: new Date().toISOString(),
@@ -123,6 +125,7 @@ serve(async (req) => {
   // SECURITY: role is ALWAYS 'user' — never read from the request body.
   // FIX (BALANCE-COL): balance column removed — it does not exist in public.users.
   const { error: insertError } = await supabase.from("users").insert({
+      source_domain: sourceDomainFromRequest(req),
     id: user.id,
     email: user.email,          // comes from the verified JWT, not the request body
     fullname,

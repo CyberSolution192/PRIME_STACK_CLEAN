@@ -17,6 +17,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { sourceDomainFromRequest, sourceDomainForUser } from '../_shared/source-domain.ts';
 
 const UNLOCK_FEE = 50; // GH₵50
 
@@ -126,6 +127,7 @@ serve(async (req) => {
 
     // ── 5. Create the store row ────────────────────────────────────────────
     const { error: storeErr } = await supabase.from("stores").insert({
+      source_domain: (await sourceDomainForUser(supabase, user.id)) ?? sourceDomainFromRequest(req),
       owner_id:   user.id,
       slug,
       short_code,

@@ -6,13 +6,13 @@
 //          5 minutes. If found, sends an SMS to the admin phone
 //          number stored in the ADMIN_ALERT_PHONE env var.
 //
-// Uses your existing Arkesel SMS infrastructure (same API key).
+// Sends through whichever SMS provider is active (Arkesel or BMS Africa) — see _shared/sms-provider.ts.
 //
 // ENV VARS REQUIRED (add in Supabase Dashboard → Edge Functions → Secrets):
 //   SUPABASE_URL              — already set by Supabase
 //   SUPABASE_SERVICE_ROLE_KEY — already set by Supabase
-//   ARKESEL_API_KEY           — already used by send-sms function
-//   ARKESEL_SENDER_ID         — already used by send-sms function
+//   ARKESEL_API_KEY / ARKESEL_SENDER_ID — Arkesel (as used by send-sms)
+//   BMS_API_KEY / BMS_SENDER_ID         — BMS Africa (as used by send-sms)
 //   ADMIN_ALERT_PHONE         — your phone number e.g. 0241234567
 //                               (the number that receives alert SMS)
 //
@@ -41,11 +41,15 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { serve }        from 'https://deno.land/std@0.177.0/http/server.ts';
+import {
+  SMS_PROVIDERS,
+  getActiveSmsProvider,
+  isProviderConfigured,
+  sendSms,
+} from '../_shared/sms-provider.ts';
 
 const SUPABASE_URL     = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const ARKESEL_API_KEY  = Deno.env.get('ARKESEL_API_KEY')!;
-const ARKESEL_SENDER   = Deno.env.get('ARKESEL_SENDER_ID') ?? 'ESTECH';
 const ADMIN_PHONE      = Deno.env.get('ADMIN_ALERT_PHONE');  // e.g. 0241234567
 
 // ── Deduplication: track last alerted event ID so we never
@@ -77,15 +81,17 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify({ skipped: true, reason: 'no_phone_configured' }), { status: 200 });
   }
 
-  if (!ARKESEL_API_KEY) {
-    console.warn('[security-alert] ARKESEL_API_KEY not set — skipping SMS.');
-    return new Response(JSON.stringify({ skipped: true, reason: 'no_sms_key' }), { status: 200 });
-  }
-
   try {
     const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+
+    // Alerts follow whichever SMS provider the admin has activated.
+    const smsProvider = await getActiveSmsProvider(db);
+    if (!isProviderConfigured(smsProvider)) {
+      console.warn(`[security-alert] ${SMS_PROVIDERS[smsProvider].label} is the active SMS provider but is not configured — skipping SMS.`);
+      return new Response(JSON.stringify({ skipped: true, reason: 'no_sms_key' }), { status: 200 });
+    }
 
     // ── Get the timestamp of the last alert we sent ────────────────────────
     const { data: settingRow } = await db
@@ -135,20 +141,11 @@ serve(async (req: Request) => {
 
     const smsMsg = message.length > 160 ? message.substring(0, 157) + '...' : message;
 
-    // ── Send SMS via Arkesel ───────────────────────────────────────────────
-    const smsUrl = new URL('https://sms.arkesel.com/sms/api');
-    smsUrl.searchParams.set('action',   'send-sms');
-    smsUrl.searchParams.set('api_key',  ARKESEL_API_KEY);
-    smsUrl.searchParams.set('to',       ADMIN_PHONE);
-    smsUrl.searchParams.set('from',     ARKESEL_SENDER);
-    smsUrl.searchParams.set('sms',      smsMsg);
-    smsUrl.searchParams.set('response', 'json');
+    // ── Send SMS via the active provider ──────────────────────────────────
+    const smsResult = await sendSms(smsProvider, [ADMIN_PHONE], smsMsg);
+    const smsOk     = smsResult.success;
 
-    const smsRes  = await fetch(smsUrl.toString());
-    const smsData = await smsRes.json().catch(() => ({})) as Record<string, unknown>;
-    const smsOk   = smsRes.ok && (smsData?.status as string)?.toUpperCase() !== 'ERROR';
-
-    console.log('[security-alert] SMS result:', smsOk, smsData);
+    console.log('[security-alert] SMS result:', smsProvider, smsOk, smsResult.message);
 
     // ── Update last alerted timestamp ──────────────────────────────────────
     // Upsert into app_settings so we don't re-alert on the same events
@@ -168,6 +165,7 @@ serve(async (req: Request) => {
         alerted_events: count,
         sms_to:         ADMIN_PHONE.replace(/\d(?=\d{4})/g, '*'), // mask all but last 4
         sms_ok:         smsOk,
+        sms_provider:   smsProvider,
         latest_event:   evtType,
       },
       source_function: 'security-alert',

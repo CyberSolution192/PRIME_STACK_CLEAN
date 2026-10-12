@@ -17,6 +17,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { serve }        from 'https://deno.land/std@0.177.0/http/server.ts';
 import { crypto }       from 'https://deno.land/std@0.177.0/crypto/mod.ts';
 import { logSecurityEvent, getClientIp } from '../_shared/security-logger.ts'; // FIX: removed duplicate import
+import { sendSms, getActiveSmsProvider } from '../_shared/sms-provider.ts';
+import { generateOtpCode, hashOtp, safeEqual, OTP_TTL_MINUTES, OTP_MAX_ATTEMPTS } from '../_shared/admin-otp.ts';
 
 const SUPABASE_URL      = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -33,8 +35,15 @@ const MAX_ADMIN_SESSIONS  = 2;   // admins get fewer concurrent sessions than us
 
 const IS_PRODUCTION = Deno.env.get("ENVIRONMENT") === "production";
 
+// One-time login codes: 'arkesel' (default, unchanged) uses Arkesel's OTP service;
+// 'local' generates and checks the code here and sends it through the active SMS provider
+// (Arkesel or BMS Africa). Switch with: supabase secrets set ADMIN_OTP_MODE=local
+const OTP_MODE   = Deno.env.get('ADMIN_OTP_MODE') === 'local' ? 'local' : 'arkesel';
+const OTP_PEPPER = Deno.env.get('ADMIN_INTERNAL_SECRET') ?? '';
+
 const ALLOWED_ORIGINS = new Set([
   "https://primeconnect.site",
+  "https://www.richsondatahub.store",
 ]);
 
 // Any http://localhost:<port> or http://127.0.0.1:<port> is allowed in
@@ -43,7 +52,7 @@ const ALLOWED_ORIGINS = new Set([
 // (5500, 5501, 5503, ...) constantly falls out of date and silently breaks
 // CORS with the sentinel 'https://no-cors-for-you' origin. This regex covers
 // every local dev port without needing to edit + redeploy each time.
-const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):\d+$/;
+const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):55\d\d$/;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -280,10 +289,12 @@ serve(async (req: Request) => {
 
     const { data: profile } = await db
       .from('users')
-      .select('role, fullname, email')
+      .select('role, fullname, email, partner_domain')
       .eq('id', authData.session.user.id).single();
 
-    if (profile?.role !== 'admin' && profile?.role !== 'superadmin') {
+    const roleOk = profile?.role === 'admin' || profile?.role === 'superadmin' ||
+                   (profile?.role === 'partner' && !!profile?.partner_domain);
+    if (!roleOk) {
       await anonClient.auth.signOut();
       await recordAttempt(db, email, ip, false);
       auditLog(db, 'admin_login_denied', authData.session.user.id, ip, userAgent, {
@@ -318,6 +329,7 @@ serve(async (req: Request) => {
       expires_at:    expiresAt,
       user_email:    authData.session.user.email,
       role:          profile.role,
+      otp_pending:   true,   // not usable until OTP is verified / trusted device accepted
       ip_address:    ip,
       user_agent:    userAgent,
       created_at:    new Date().toISOString(),
@@ -337,8 +349,13 @@ serve(async (req: Request) => {
     // step='request-otp' → send SMS OTP, return session_id (pending) + phone hint.
     // The session row is already in the DB. The client stores session_id in
     // sessionStorage and sends it as x-session-id in the verify-otp request.
-    // step not set → no phone fallback — return session immediately (rare).
-    const step        = (body.step as string) ?? '';
+    // A missing step is treated as 'request-otp'; any other value is rejected (never a free session).
+    // Activate a pending session: it only becomes usable once this runs.
+    const activateSession = () =>
+      db.from('admin_sessions').update({ otp_pending: false }).eq('session_id', sessionId);
+
+    // A missing/unknown step must never skip the one-time code.
+    const step        = (body.step as string) || 'request-otp';
     const fingerprint = (body.fingerprint as string) ?? 'unknown';
 
     // ── Trusted device check — skip OTP if this browser already has a
@@ -366,6 +383,7 @@ serve(async (req: Request) => {
           details: { fingerprint, device_id: deviceRow.id }, source_function: 'admin-auth',
         });
 
+        await activateSession();
         return json(
           { success: true, session_id: sessionId,
             user: { fullname: profile.fullname, email: profile.email, role: profile.role } },
@@ -376,15 +394,21 @@ serve(async (req: Request) => {
     }
 
     if (step === 'request-otp') {
-      const ARKESEL_API_KEY = Deno.env.get('ARKESEL_API_KEY')!;
+      const ARKESEL_API_KEY = Deno.env.get('ARKESEL_API_KEY') ?? '';
       const ARKESEL_SENDER  = Deno.env.get('ARKESEL_SENDER_ID') ?? 'PRIMECONNECT';
 
       const { data: userRow } = await db.from('users').select('phone').eq('id', authData.session.user.id).single();
       const phone = userRow?.phone ?? null;
 
       if (!phone) {
+        if (profile.role === 'partner') {
+          // Partner accounts always need the one-time code — no phone, no login.
+          await db.from('admin_sessions').delete().eq('session_id', sessionId);
+          return json({ success: false, error: 'A phone number is required on this account to sign in.' }, 403, {}, req);
+        }
         // No phone on record — skip 2FA and return session immediately
         console.warn('[admin-auth] No phone for 2FA — granting session without OTP');
+        await activateSession();
         return json(
           { success: true, session_id: sessionId,
             user: { fullname: profile.fullname, email: profile.email, role: profile.role } },
@@ -397,22 +421,56 @@ serve(async (req: Request) => {
       if (formattedPhone.startsWith('0')) formattedPhone = '233' + formattedPhone.substring(1);
       if (!formattedPhone.startsWith('233')) formattedPhone = '233' + formattedPhone;
 
-      const otpRes = await fetch('https://sms.arkesel.com/api/otp/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'api-key': ARKESEL_API_KEY },
-        body: JSON.stringify({
-          expiry:    5, length: 6, medium: 'sms', type: 'numeric',
-          message:   'Your PrimeConnect admin OTP is %otp_code%. Expires in %expiry% minutes. Do not share.',
-          number:    formattedPhone,
-          sender_id: ARKESEL_SENDER,
-        }),
-      });
-      const otpData = await otpRes.json() as Record<string, unknown>;
+      if (OTP_MODE === 'local') {
+        if (!OTP_PEPPER) {
+          console.error('[admin-auth] ADMIN_INTERNAL_SECRET is not set — cannot issue local OTPs');
+          await db.from('admin_sessions').delete().eq('session_id', sessionId);
+          return json({ success: false, error: 'Failed to send OTP. Please try again.' }, 500, {}, req);
+        }
+        const code = generateOtpCode();
+        // housekeeping: forget codes that expired more than an hour ago
+        await db.from('admin_login_otps').delete().lt('expires_at', new Date(Date.now() - 3600_000).toISOString());
+        const { error: otpStoreErr } = await db.from('admin_login_otps').upsert({
+          session_id: sessionId,
+          user_id:    authData.session.user.id,
+          code_hash:  await hashOtp(code, sessionId, OTP_PEPPER),
+          attempts:   0,
+          expires_at: new Date(Date.now() + OTP_TTL_MINUTES * 60_000).toISOString(),
+          created_at: new Date().toISOString(),
+        }, { onConflict: 'session_id' });
+        if (otpStoreErr) {
+          console.error('[admin-auth] could not store OTP:', otpStoreErr.message);
+          await db.from('admin_sessions').delete().eq('session_id', sessionId);
+          return json({ success: false, error: 'Failed to send OTP. Please try again.' }, 500, {}, req);
+        }
+        const smsResult = await sendSms(
+          await getActiveSmsProvider(db), [formattedPhone],
+          `Your PrimeConnect admin OTP is ${code}. Expires in ${OTP_TTL_MINUTES} minutes. Do not share.`,
+        );
+        if (!smsResult.success) {
+          console.error('[admin-auth] OTP SMS failed via', smsResult.provider, '-', smsResult.message);
+          await db.from('admin_login_otps').delete().eq('session_id', sessionId);
+          await db.from('admin_sessions').delete().eq('session_id', sessionId);
+          return json({ success: false, error: 'Failed to send OTP. Please try again.' }, 500, {}, req);
+        }
+      } else {
+        const otpRes = await fetch('https://sms.arkesel.com/api/otp/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'api-key': ARKESEL_API_KEY },
+          body: JSON.stringify({
+            expiry:    5, length: 6, medium: 'sms', type: 'numeric',
+            message:   'Your PrimeConnect admin OTP is %otp_code%. Expires in %expiry% minutes. Do not share.',
+            number:    formattedPhone,
+            sender_id: ARKESEL_SENDER,
+          }),
+        });
+        const otpData = await otpRes.json() as Record<string, unknown>;
 
-      if (otpData.code !== '1000') {
-        console.error('[admin-auth] OTP send failed:', otpData);
-        await db.from('admin_sessions').delete().eq('session_id', sessionId);
-        return json({ success: false, error: 'Failed to send OTP. Please try again.' }, 500, {}, req);
+        if (otpData.code !== '1000') {
+          console.error('[admin-auth] OTP send failed:', otpData);
+          await db.from('admin_sessions').delete().eq('session_id', sessionId);
+          return json({ success: false, error: 'Failed to send OTP. Please try again.' }, 500, {}, req);
+        }
       }
 
       logSecurityEvent({
@@ -427,12 +485,9 @@ serve(async (req: Request) => {
       return json({ success: true, step: 'otp-sent', phone_hint: phoneHint, session_id: sessionId }, 200, {}, req);
     }
 
-    // No step set — no-phone fallback or direct login: return session immediately
-    return json(
-      { success: true, session_id: sessionId,
-        user: { fullname: profile.fullname, email: profile.email, role: profile.role } },
-      200, { 'Set-Cookie': setCookie(sessionId) }, req,
-    );
+    // Unknown step: never hand out a session without the one-time code.
+    await db.from('admin_sessions').delete().eq('session_id', sessionId);
+    return json({ success: false, error: 'Invalid login request.' }, 400, {}, req);
   }
 
   // ── VERIFY OTP ─────────────────────────────────────────────────────────────
@@ -442,7 +497,10 @@ serve(async (req: Request) => {
   // Arkesel, then activate the session by setting the HttpOnly cookie.
   // No email or password is needed here — the session row proves step 1 passed.
   if (action === 'verify-otp') {
-    const sessionId   = getSessionId();
+    // The pending session id the login step just issued (sent as a header/body field) must win over
+    // any cookie already in the browser. An old cookie from a previous or deleted session would
+    // otherwise be looked up instead, and the code could never match ("Session expired").
+    const sessionId   = (body.__sid as string | undefined) || req.headers.get('x-session-id') || getSessionId();
     const otp         = (body.otp         as string) ?? '';
     const fingerprint = (body.fingerprint as string) ?? 'unknown';
 
@@ -468,7 +526,38 @@ serve(async (req: Request) => {
     const { data: userRow } = await db.from('users').select('phone, fullname, email').eq('id', pendingSession.user_id).single();
     const phone = userRow?.phone ?? null;
 
-    if (phone) {
+    if (!phone && pendingSession.role === 'partner') {
+      return json({ success: false, error: 'A phone number is required on this account to sign in.' }, 403, {}, req);
+    }
+
+    if (phone && OTP_MODE === 'local') {
+      // Checked here: one active code per login attempt, 5 tries, 5-minute lifetime.
+      const { data: rec } = await db.from('admin_login_otps')
+        .select('code_hash, attempts, expires_at').eq('session_id', sessionId).maybeSingle();
+      const fail = (reason: string, status = 401) => {
+        logSecurityEvent({
+          severity: 'HIGH', event_type: 'admin_otp_failed',
+          account_email: pendingSession.user_email, action: 'verify_otp',
+          ip_address: getClientIp(req), details: { reason, mode: 'local', fingerprint },
+          source_function: 'admin-auth',
+        });
+        return json({ success: false, error: reason }, status, {}, req);
+      };
+      if (!rec || new Date(rec.expires_at) < new Date()) {
+        return fail('OTP has expired. Please log in again.');
+      }
+      if (rec.attempts >= OTP_MAX_ATTEMPTS) {
+        await db.from('admin_login_otps').delete().eq('session_id', sessionId);
+        await db.from('admin_sessions').delete().eq('session_id', sessionId);
+        return fail('Too many incorrect codes. Please log in again.', 429);
+      }
+      await db.from('admin_login_otps').update({ attempts: rec.attempts + 1 }).eq('session_id', sessionId);
+      const presented = await hashOtp(String(otp).trim(), sessionId, OTP_PEPPER);
+      if (!safeEqual(presented, rec.code_hash)) {
+        return fail('Invalid OTP code. Please try again.');
+      }
+      await db.from('admin_login_otps').delete().eq('session_id', sessionId);
+    } else if (phone) {
       let formattedPhone = phone.replace(/\D/g, '');
       if (formattedPhone.startsWith('0')) formattedPhone = '233' + formattedPhone.substring(1);
       if (!formattedPhone.startsWith('233')) formattedPhone = '233' + formattedPhone;
@@ -497,7 +586,7 @@ serve(async (req: Request) => {
 
     // OTP verified (or no phone) — activate session by setting the cookie
     await db.from('admin_sessions')
-      .update({ last_active: new Date().toISOString() })
+      .update({ last_active: new Date().toISOString(), otp_pending: false })
       .eq('session_id', sessionId);
 
     logSecurityEvent({
@@ -533,6 +622,7 @@ serve(async (req: Request) => {
     const { data: session } = await db
       .from('admin_sessions').select('*').eq('session_id', sessionId).single();
     if (!session) return json({ success: false, error: 'Session not found' }, 401, {}, req);
+    if (session.otp_pending) return json({ success: false, error: 'OTP verification required' }, 401, {}, req);
 
     if (new Date(session.expires_at) < new Date()) {
       await db.from('admin_sessions').delete().eq('session_id', sessionId);
@@ -657,11 +747,23 @@ serve(async (req: Request) => {
     const { data: session } = await db
       .from('admin_sessions').select('*').eq('session_id', sessionId).single();
     if (!session) return json({ success: false, error: 'Invalid session' }, 401, {}, req);
+    if (session.otp_pending) return json({ success: false, error: 'OTP verification required' }, 401, {}, req);
 
     if (new Date(session.expires_at) < new Date()) {
       await db.from('admin_sessions').delete().eq('session_id', sessionId);
       return json({ success: false, error: 'Session expired' }, 401,
         { 'Set-Cookie': clearCookie() }, req);
+    }
+
+    // The account's current role must still match the one this session was created with
+    // (a role change forces a fresh login).
+    {
+      const { data: acctNow } = await db.from('users').select('role').eq('id', session.user_id).maybeSingle();
+      if (!acctNow || acctNow.role !== session.role) {
+        await db.from('admin_sessions').delete().eq('session_id', sessionId);
+        return json({ success: false, error: 'Session expired' }, 401,
+          { 'Set-Cookie': clearCookie() }, req);
+      }
     }
 
     // Proactive token refresh — server-side only, never returned to browser
@@ -691,6 +793,16 @@ serve(async (req: Request) => {
         .eq('session_id', sessionId);
     }
 
+    // A partner's domain is shown in the portal header (read fresh from the database).
+    let partnerDomain: string | null = null;
+    if (session.role === 'partner') {
+      const { data: acct } = await db.from('users').select('role, partner_domain').eq('id', session.user_id).maybeSingle();
+      if (acct?.role !== 'partner' || !acct?.partner_domain) {
+        return json({ success: false, error: 'Invalid session' }, 401, {}, req);
+      }
+      partnerDomain = acct.partner_domain as string;
+    }
+
     // ── access_token intentionally omitted from this response ─────────────
     return json({
       success: true,
@@ -699,6 +811,7 @@ serve(async (req: Request) => {
         user_id: session.user_id,
         email:   session.user_email,
         role:    session.role,
+        partner_domain: partnerDomain,
       },
     }, 200, {}, req);
   }

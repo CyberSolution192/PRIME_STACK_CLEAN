@@ -9,6 +9,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { rejectUnsafeChars } from '../_shared/input-sanitize.ts';
+import { sourceDomainForUser } from '../_shared/source-domain.ts';
 
 // ── PBKDF2 PIN verification (unchanged) ───────────────────────────────────────
 const PBKDF2_ITERATIONS = 310_000;
@@ -292,6 +293,7 @@ Deno.serve(async (req) => {
     // friendly message instead of a raw 500.
     const { error: insertError } = await supabase.from('withdrawal_requests').insert({
       user_id:           user.id,
+      source_domain:     await sourceDomainForUser(supabase, user.id),   // follows the user's own domain
       amount,
       fee:               0,
       recipient_account: phone,

@@ -13,6 +13,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requestedDomain, scopeReads } from '../_shared/domain-scope.ts';
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -60,7 +61,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   // ── Auth: admin only ──────────────────────────────────────────────────────
-  const supabase = createClient(
+  let supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
@@ -77,6 +78,12 @@ serve(async (req) => {
   }
 
   const action   = (body.action as string | undefined)?.trim();
+  // Admin portal domain filter: read actions only; unknown/"all" = no filter.
+  const scopedDomain = requestedDomain(body);
+  if (["get-orders","get-stats"].includes(action as string)) {
+    supabase = scopeReads(supabase, scopedDomain, ["api_orders"]);
+  }
+
   const page     = Math.max(1, parseInt(String(body.page || 1)));
   const pageSize = Math.min(50, Math.max(1, parseInt(String(body.page_size || 20))));
   const offset   = (page - 1) * pageSize;

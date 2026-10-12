@@ -16,6 +16,7 @@ const IS_PRODUCTION = Deno.env.get("ENVIRONMENT") === "production";
 
 const ALLOWED_ORIGINS = new Set([
   "https://primeconnect.site",
+  "https://www.richsondatahub.store",
   // Local dev origins — automatically excluded in production
   ...(IS_PRODUCTION ? [] : [
     "http://127.0.0.1:5500",
@@ -30,7 +31,7 @@ const ALLOWED_ORIGINS = new Set([
 
 /** Returns the request's Origin if it's on the allowlist, otherwise a
  *  value that will never match any real origin (so the browser blocks it). */
-export const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):\d+$/;
+export const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):55\d\d$/;
 
 function getAllowedOrigin(req: Request): string {
   const origin = req.headers.get('Origin') ?? '';

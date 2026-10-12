@@ -1,4 +1,4 @@
-import { supabase, PAYSTACK_PUBLIC_KEY, SUPABASE_PROJECT_URL, SUPABASE_ANON } from './supabase-config.js';
+import { supabase, PAYSTACK_PUBLIC_KEY, paystackRouting, KNOWN_DOMAINS, SUPABASE_PROJECT_URL, SUPABASE_ANON } from './supabase-config.js';
     
     const supabaseKey = SUPABASE_ANON; // used for edge function Authorization header
 
@@ -178,6 +178,18 @@ let storeShortCode = null; // set once loadStore resolves ?s= param
                 throw new Error('Store not found');
             }
             const storeData = storeInfoData.store;
+
+        // A store lives on its owner's domain. If this link was opened on the other domain,
+        // move the visitor to the store's own domain (same path and code) before anything else,
+        // so the payment popup runs where the store's settlement account is set up.
+        {
+            const home = storeData.home_domain;
+            const here = window.location.hostname;
+            if (home && home !== here && KNOWN_DOMAINS.includes(home) && KNOWN_DOMAINS.includes(here)) {
+                window.location.replace(`https://${home}${window.location.pathname}${window.location.search}${window.location.hash}`);
+                return;
+            }
+        }
 
             // Persist server-resolved owner ID for use in subsequent requests.
             storeOwnerUserId = storeData.owner_id;
@@ -473,11 +485,13 @@ async function processPurchase() {
     try {
         const handler = PaystackPop.setup({
             key:      PAYSTACK_PUBLIC_KEY,
-            email:    `customer-${Date.now()}@primeconnect.site`,
+            ...paystackRouting(),   // per-domain settlement subaccount (off until the key switch)
+            email:    `customer-${Date.now()}@${window.location.hostname.replace(/^www\./, '')}`,
             amount:   amountInPesewas,
             currency: 'GHS',
             ref:      paymentRef,  // same ref used in pre-registration above
             metadata: {
+                source_domain: location.hostname,   // which domain this payment came from (reporting only)
                 store_owner_id:    storeOwnerUserId,
                 storeownerid:      storeOwnerUserId,
                 store_owner_email: storeOwnerEmail,

@@ -9,6 +9,11 @@
  *
  * Per-provider behavior:
  *   - up2u: checked via Up2u's GET /order/:order_id — real status resolution.
+ *   - dataspark: checked via Dataspark GET /orders?client_reference=<our order id>.
+ *     Dataspark reports processing | completed | failed. The reference we sent is either
+ *     our order_reference or the generated id stored in provider_response._dataspark_reference.
+ *     (The dataspark-webhook function normally resolves these within seconds;
+ *     this job is the safety net if a webhook is missed.)
  *   - bundlezonegh: Bundle Zone GH's API has NO documented order-status or
  *     order-lookup-by-reference endpoint (only place_order, check_balance,
  *     get_bundles, get_transactions — none of which reliably identify a
@@ -54,6 +59,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { raiseAlert } from "../_shared/admin-alerts.ts";
+import { getDatasparkOrderByReference } from "../_shared/dataspark.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -113,7 +119,7 @@ serve(async (req) => {
     .from("adminorders")
     .select("id, order_reference, status, updated_at, external_response")
     .eq("status", "processing")
-    .filter("external_response->>provider", "in", "(up2u,bundlezonegh)")
+    .filter("external_response->>provider", "in", "(up2u,bundlezonegh,dataspark)")
     .lt("updated_at", staleCutoff)
     .order("updated_at", { ascending: true })
     .limit(BATCH_SIZE);
@@ -135,6 +141,40 @@ serve(async (req) => {
     checked++;
     const provider: string = order.external_response?.provider || "unknown";
     const isPastEscalation = order.updated_at < escalateCutoff;
+
+    //  Dataspark: look the order up by our own reference 
+    if (provider === "dataspark") {
+      try {
+        // The reference we sent is our order_reference (buy-data / api-order) or a generated id kept in
+        // provider_response (store / guest flow via paystack-webhook).
+        const sentRef = order.external_response?.provider_response?._dataspark_reference || order.order_reference;
+        const look = await getDatasparkOrderByReference(sentRef);
+        let newStatus: string | null = null;
+        if (look.found && look.order) {
+          if (look.order.status === "completed") newStatus = "completed";
+          else if (look.order.status === "failed") newStatus = "failed";
+        }
+        if (newStatus) {
+          const synced = await syncStatus(SUPABASE_URL, INTERNAL_SECRET, SYSTEM_ADMIN_ID, order.id, newStatus);
+          if (synced) { updated++; console.log(`[reconcile-stale-orders] ${order.order_reference} -> ${newStatus} (dataspark)`); }
+          else console.error(`[reconcile-stale-orders] ${order.order_reference}  failed to sync dataspark status`);
+        } else if (isPastEscalation) {
+          const why = look.found ? `Dataspark still reports "${look.order?.status}"`
+            : look.notFound ? "Dataspark has no record of this order"
+            : `Dataspark lookup failed (${look.error || "unknown"})`;
+          await escalate(supabase, order, `${why} after ${ESCALATE_MINUTES} minutes.`, provider);
+          escalated++;
+        }
+      } catch (err) {
+        console.error(`[reconcile-stale-orders] ${order.order_reference}  dataspark error:`, err);
+        if (isPastEscalation) {
+          await escalate(supabase, order, `Dataspark reconciliation threw: ${err instanceof Error ? err.message : "unknown"}`, provider);
+          escalated++;
+        }
+      }
+      await sleep(SLEEP_MS);
+      continue;
+    }
 
     // ── Bundle Zone GH: no order-status endpoint exists, so there's nothing to
     // poll. Skip straight to the same time-based escalation safety net used

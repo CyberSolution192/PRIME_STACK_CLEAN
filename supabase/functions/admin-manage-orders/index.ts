@@ -23,6 +23,9 @@
  */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requestedDomain, scopeReads } from '../_shared/domain-scope.ts';
+import { partnerAllowed } from '../_shared/partner-access.ts';
+import { sourceDomainFromValue } from '../_shared/source-domain.ts';
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -47,7 +50,7 @@ async function verifyAdmin(_supabase: ReturnType<typeof createClient>, req: Requ
   const userId = req.headers.get("x-admin-user-id");
   const role   = req.headers.get("x-admin-role");
   if (!userId || !role) return { user: null, profile: null };
-  if (!["admin", "superadmin"].includes(role)) return { user: null, profile: null };
+  if (!["admin", "superadmin", "partner"].includes(role)) return { user: null, profile: null };
   return { user: { id: userId }, profile: { role, fullname: "Admin" } };
 }
 
@@ -109,7 +112,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ success: false, message: "Method not allowed" }, 405);
 
-  const supabase = createClient(
+  let supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
@@ -125,8 +128,72 @@ serve(async (req) => {
   }
 
   const action = body.action as string;
+  // Admin portal domain filter: read actions only; unknown/"all" = no filter.
+  // Partner accounts: forced to their own domain (from the proxy, which read it from the database),
+  // allowlisted read actions only. Admin/superadmin may pick any domain or All.
+  const isPartner = req.headers.get("x-admin-role") === "partner";
+  const partnerDomain = isPartner ? sourceDomainFromValue(req.headers.get("x-admin-domain")) : undefined;
+  if (isPartner && (!partnerDomain || !partnerAllowed("admin-manage-orders", action))) {
+    return json({ success: false, message: "Not permitted for this account" }, 403);
+  }
+  const scopedDomain = isPartner ? partnerDomain : requestedDomain(body);
+  if (isPartner || ["list","get-stats","get-dashboard-stats","get-analytics","export-csv","export-pdf","get-paystack-history","get-manual-deposits"].includes(action as string)) {
+    supabase = scopeReads(supabase, scopedDomain, ["adminorders","guest_orders","checker_orders","api_orders","transactions","paystack_verifications","manual_deposits"]);
+  }
+
 
   try {
+
+    // ── GET DOMAINS (populates the portal's domain filter) ─────────────────
+    if (action === "get-domains") {
+      const { data, error } = await supabase
+        .from("domains").select("host, label").order("created_at", { ascending: true });
+      if (error) throw error;
+      return json({ success: true, domains: data || [] });
+    }
+
+    // ── DOMAIN SUMMARY (owner only; ignores the domain filter) ─────────────
+    // Completed orders and revenue per domain, same basis as the dashboard
+    // (completed data orders + completed checker orders). Not on the partner allowlist.
+    if (action === "get-domain-summary") {
+      if (isPartner) return json({ success: false, message: "Not permitted for this account" }, 403);
+
+      const now = Date.now();
+      const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+      const cut = { today: dayStart.getTime(), d7: now - 7 * 86_400_000, d30: now - 30 * 86_400_000 };
+
+      type Agg = { orders: number; today: number; d7: number; d30: number; all: number; attention: number };
+      const byDomain: Record<string, Agg> = {};
+      const blank = (): Agg => ({ orders: 0, today: 0, d7: 0, d30: 0, all: 0, attention: 0 });
+
+      for (const table of ["adminorders", "checker_orders"]) {
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabase
+            .from(table).select("amount, created_at, status, source_domain")
+            .order("id", { ascending: true }).range(from, from + 999);
+          if (error) throw error;
+          for (const r of data || []) {
+            const a = (byDomain[r.source_domain ?? "(untagged)"] ??= blank());
+            if (r.status === "completed") {
+              const amt = Math.abs(parseFloat(r.amount) || 0);
+              const t = Date.parse(r.created_at);
+              a.orders++; a.all += amt;
+              if (t >= cut.today) a.today += amt;
+              if (t >= cut.d7)    a.d7    += amt;
+              if (t >= cut.d30)   a.d30   += amt;
+            } else if (r.status === "manual_review" || r.status === "failed_provider") {
+              a.attention++;
+            }
+          }
+          if (!data || data.length < 1000) break;
+        }
+      }
+
+      const { data: doms } = await supabase.from("domains").select("host, label").order("created_at", { ascending: true });
+      const rows = (doms || []).map((d: any) => ({ host: d.host, label: d.label, ...(byDomain[d.host] ?? blank()) }));
+      if (byDomain["(untagged)"]) rows.push({ host: "(untagged)", label: "Not labelled", ...byDomain["(untagged)"] });
+      return json({ success: true, domains: rows });
+    }
 
     // ── LIST orders (paginated) ────────────────────────────────────────────
     if (action === "list") {
@@ -811,7 +878,7 @@ serve(async (req) => {
 
       // Enum-validated settings
       const ENUM_SETTINGS: Record<string, string[]> = {
-        active_provider: ["justicedata", "pensite", "hubnet", "sparkdata", "databosshub", "up2u", "bundlezonegh"],
+        active_provider: ["justicedata", "dataspark", "hubnet", "sparkdata", "databosshub", "up2u", "bundlezonegh"],
         deposit_method:  ["automatic", "manual"],
       };
 
@@ -1108,7 +1175,9 @@ supabase
   pendingStoreRes,
   pendingTxnRes,
 ] = await Promise.all([
-    supabase.from("users").select("id", { count: "exact", head: true }),
+    (scopedDomain
+          ? supabase.from("users").select("id", { count: "exact", head: true }).eq("source_domain", scopedDomain)
+          : supabase.from("users").select("id", { count: "exact", head: true })),
     supabase
   .from("adminorders")
   .select("id", { count: "exact", head: true })

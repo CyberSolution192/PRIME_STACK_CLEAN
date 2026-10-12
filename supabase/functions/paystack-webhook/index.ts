@@ -23,9 +23,12 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sourceDomainFromValue } from '../_shared/source-domain.ts';
+import { checkSubaccountRouting } from '../_shared/paystack-routing.ts';
+import { placeDatasparkOrder } from '../_shared/dataspark.ts';
 type Provider =
   | "justicedata"
-  | "pensite"
+  | "dataspark"
   | "hubnet"
   | "sparkdata"
   | "databosshub"
@@ -68,28 +71,6 @@ function mapNetworkJusticeData(
     return size >= 15
       ? "AIRTELTIGO_BIGTIME"
       : "AIRTELTIGO_ISHARE";
-  }
-
-  return network.toUpperCase();
-}
-
-function mapNetworkPensite(
-  network: string,
-  size: number
-): string {
-
-  if (network === "mtn") {
-    return "YELLO";
-  }
-
-  if (network === "telecel") {
-    return "TELECEL";
-  }
-
-  if (network === "airteltigo") {
-    return size >= 15
-      ? "AT_BIGTIME"
-      : "AT_PREMIUM";
   }
 
   return network.toUpperCase();
@@ -256,94 +237,6 @@ async function placeJusticeDataOrder(
         e instanceof Error
           ? e.message
           : "JusticeData unknown error"
-    };
-  }
-}
-async function placePensiteOrder(
-  payload: OrderPayload
-): Promise<ProviderResult> {
-
-  const apiKey =
-    Deno.env.get("PENSITE_API_KEY");
-
-  if (!apiKey) {
-    return {
-      success: false,
-      error: "Pensite API key not configured"
-    };
-  }
-
-  const networkKey =
-    mapNetworkPensite(
-      payload.network,
-      payload.bundleSize
-    );
-
-  try {
-
-    console.log(
-      `[Pensite] ${payload.orderId} — ${payload.network} ${payload.bundleSize}GB -> ${payload.phone}`
-    );
-
-    const res = await fetch(
-      "https://pensitegh.com/api/purchase",
-      {
-        method: "POST",
-
-        headers: {
-          "X-API-Key": apiKey,
-          "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify({
-          networkKey,
-          recipient: payload.phone,
-          capacity: payload.bundleSize
-        }),
-      }
-    );
-
-    if (!res.ok) {
-
-      const text = await res.text();
-
-      return {
-        success: false,
-        error: `Pensite HTTP ${res.status}: ${text}`
-      };
-    }
-
-    const data = await res.json();
-
-    if (data.status !== "success") {
-      return {
-        success: false,
-        error: `Pensite error: ${data.message ?? "unknown"}`
-      };
-    }
-
-    console.log(
-      `[Pensite] Success:`,
-      JSON.stringify(data)
-    );
-
-    return {
-      success: true,
-      data: {
-        ...data,
-        _provider: "pensite",
-        _network_key: networkKey
-      }
-    };
-
-  } catch (e) {
-
-    return {
-      success: false,
-      error:
-        e instanceof Error
-          ? e.message
-          : "Pensite unknown error"
     };
   }
 }
@@ -778,8 +671,8 @@ async function dispatchToProvider(
 
   switch (provider) {
 
-    case "pensite":
-      return await placePensiteOrder(payload);
+    case "dataspark":
+      return await placeDatasparkOrder(payload);
 
     case "hubnet":
       return await placeHubnetOrder(payload);
@@ -955,8 +848,28 @@ serve(async (req) => {
   // Re-verify with Paystack REST API — primary security check
   const verification = await reVerifyWithPaystack(reference, PAYSTACK_SECRET_KEY);
   if (!verification.ok) {
-    console.error("Re-verification failed -- not recording:", verification.data);
-    return jsonOk({ message: "Re-verification failed -- not recording" });
+    console.error(`[WEBHOOK-REVERIFY-FAILED] ref ${reference}: Paystack did not confirm this payment with the stored secret key. Response:`, JSON.stringify(verification.data ?? null));
+    // Leave a visible trace in the DB (this used to vanish silently) ...
+    try {
+      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await sb.from("webhook_events").upsert(
+        {
+          reference,
+          event_type: "charge.success",
+          email,
+          amount: (event?.data?.amount ?? 0) / 100,
+          paystack_data: { reverify_failed: true, paystack_reply: verification.data ?? null, webhook_payload: event?.data ?? null },
+          processed: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "reference" },
+      );
+    } catch (e) {
+      console.error("[WEBHOOK-REVERIFY-FAILED] could not store trace:", (e as Error).message);
+    }
+    // ... and answer with an error status so Paystack RETRIES (a 200 told it "all done").
+    return jsonErr({ message: "Re-verification failed -- will be retried" }, 500);
   }
 
   const paystackData = verification.data;
@@ -964,6 +877,8 @@ serve(async (req) => {
   console.log(`Re-verified: GHC${amountGHS} from ${email}`);
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  await checkSubaccountRouting(supabase, paystackData);
 
   // Idempotency: check webhook_events to avoid double-processing
   const { data: existingEvent } = await supabase
@@ -1031,9 +946,10 @@ serve(async (req) => {
     error
   );
 
-  return jsonOk({
-    message: "Webhook crashed"
-  });
+  // Non-200 so Paystack retries instead of treating the crash as success.
+  return jsonErr({
+    message: "Webhook crashed -- will be retried"
+  }, 500);
 }
   }
 
@@ -1103,6 +1019,7 @@ async function handleWalletTopup({
     .from("paystack_verifications")
     .upsert(
       {
+      source_domain: sourceDomainFromValue(metadata?.source_domain),
         user_id: userId,
         reference,
         amount: amountGHS,
@@ -1385,6 +1302,7 @@ if (orderLookupError) {
   await supabase
   .from("guest_orders")
   .upsert({
+      source_domain: sourceDomainFromValue(metadata?.source_domain),
     guest_email:
       paystackData?.customer?.email || null,
 
@@ -1439,6 +1357,7 @@ if (orderLookupError) {
   );
 
   const reconstructedOrder = {
+    source_domain: sourceDomainFromValue(metadata?.source_domain),
     order_reference: reference,
     payment_reference: reference,
 
@@ -1538,6 +1457,7 @@ if (!existingTxn) {
   await supabase
     .from("transactions")
     .insert({
+      source_domain: sourceDomainFromValue(metadata?.source_domain),
     userid: null,
     amount: -sellingPrice,
     type: "purchase",

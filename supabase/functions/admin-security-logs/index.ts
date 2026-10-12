@@ -24,6 +24,7 @@ const IS_PRODUCTION    = Deno.env.get('ENVIRONMENT') === 'production';
 
 const ALLOWED_ORIGINS = new Set([
   'https://primeconnect.site',
+  'https://www.richsondatahub.store',
   ...(!IS_PRODUCTION ? [
     'http://127.0.0.1:5500',
     'http://127.0.0.1:5501',
@@ -41,9 +42,14 @@ function serviceClient() {
   });
 }
 
+const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):55\d\d$/;
+
 function getAllowedOrigin(req: Request): string {
   const origin = req.headers.get('Origin') ?? '';
-  return ALLOWED_ORIGINS.has(origin) ? origin : 'https://no-cors';
+  if (ALLOWED_ORIGINS.has(origin)) return origin;
+  // Local development on Live Server ports 5500-5599, never in production.
+  if (!IS_PRODUCTION && LOCAL_DEV_ORIGIN_RE.test(origin)) return origin;
+  return 'https://no-cors';
 }
 
 function corsHeaders(req: Request) {

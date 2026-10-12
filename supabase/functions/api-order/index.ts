@@ -35,6 +35,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateApiKey, checkRateLimit } from "../_shared/api-auth.ts";
+import { sourceDomainForUser } from '../_shared/source-domain.ts';
+import { placeDatasparkOrder } from '../_shared/dataspark.ts';
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -52,7 +54,7 @@ function json(body: unknown, status = 200) {
 const RATE_LIMIT = 30; // requests per minute
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Provider = "justicedata" | "pensite" | "hubnet" | "sparkdata" | "databosshub" | "up2u" | "bundlezonegh";
+type Provider = "justicedata" | "dataspark" | "hubnet" | "sparkdata" | "databosshub" | "up2u" | "bundlezonegh";
 
 interface ProviderResult {
   success: boolean;
@@ -83,13 +85,6 @@ function mapJusticeData(network: string, size: number): string {
   if (network === "mtn")        return "MTN";
   if (network === "telecel")    return "TELECEL";
   if (network === "airteltigo") return size >= 15 ? "AIRTELTIGO_BIGTIME" : "AIRTELTIGO_ISHARE";
-  return network.toUpperCase();
-}
-
-function mapPensite(network: string, size: number): string {
-  if (network === "mtn")        return "YELLO";
-  if (network === "telecel")    return "TELECEL";
-  if (network === "airteltigo") return size >= 15 ? "AT_BIGTIME" : "AT_PREMIUM";
   return network.toUpperCase();
 }
 
@@ -149,26 +144,6 @@ async function placeJusticeDataOrder(payload: OrderPayload): Promise<ProviderRes
     return { success: true, data: { ...data, _provider: "justicedata", _network_key: networkKey } };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "JusticeData unknown error" };
-  }
-}
-
-async function placePensiteOrder(payload: OrderPayload): Promise<ProviderResult> {
-  const apiKey = Deno.env.get("PENSITE_API_KEY");
-  if (!apiKey) return { success: false, error: "Pensite API key not configured" };
-
-  const networkKey = mapPensite(payload.network, payload.bundleSize);
-  try {
-    const res = await fetch("https://pensitegh.com/api/purchase", {
-      method: "POST",
-      headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ networkKey, recipient: payload.phone, capacity: payload.bundleSize }),
-    });
-    if (!res.ok) return { success: false, error: `Pensite HTTP ${res.status}: ${await res.text()}` };
-    const data = await res.json();
-    if (data.status !== "success") return { success: false, error: `Pensite error: ${data.message || "Unknown"}` };
-    return { success: true, data: { ...data, _provider: "pensite", _network_key: networkKey } };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Pensite unknown error" };
   }
 }
 
@@ -384,7 +359,7 @@ async function placeOrder(
   let result: ProviderResult;
 
   switch (provider) {
-    case "pensite":     result = await placePensiteOrder(payload);     break;
+    case "dataspark":     result = await placeDatasparkOrder(payload);     break;
     case "hubnet":      result = await placeHubnetOrder(payload);      break;
     case "sparkdata":   result = await placeSparkDataOrder(payload);   break;
     case "databosshub": result = await placeDataBossHubOrder(payload); break;
@@ -584,7 +559,9 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── 10. Record in api_orders ──────────────────────────────────────────────
+  const apiSourceDomain = await sourceDomainForUser(supabase, auth.userId);
   const { error: apiOrderError } = await supabase.from("api_orders").insert({
+      source_domain: apiSourceDomain,
     api_key_id:       auth.keyId,
     user_id:          auth.userId,
     order_reference:  orderRef,
@@ -616,6 +593,7 @@ Deno.serve(async (req: Request) => {
 
   // ── 11. Record in adminorders (operator visibility) ───────────────────────
   const { error: adminOrderError } = await supabase.from("adminorders").insert({
+      source_domain: apiSourceDomain,
     userid:            auth.userId,
     order_reference:   orderRef,
     payment_reference: null,
@@ -649,6 +627,7 @@ Deno.serve(async (req: Request) => {
 
   // ── 12. Record in transactions ────────────────────────────────────────────
   await supabase.from("transactions").insert({
+      source_domain: apiSourceDomain,
     userid:      auth.userId,
     amount:      -finalPrice,
     type:        "purchase",

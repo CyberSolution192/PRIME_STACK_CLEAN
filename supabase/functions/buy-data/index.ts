@@ -1,6 +1,8 @@
 //buy-data-edge functions 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { sourceDomainFromRequest, sourceDomainForUser } from '../_shared/source-domain.ts';
+import { placeDatasparkOrder } from '../_shared/dataspark.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,7 +10,7 @@ const corsHeaders = {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Provider = 'justicedata' | 'pensite' | 'hubnet' | 'sparkdata' | 'databosshub' | 'up2u' | 'bundlezonegh';
+type Provider = 'justicedata' | 'dataspark' | 'hubnet' | 'sparkdata' | 'databosshub' | 'up2u' | 'bundlezonegh';
 
 interface ProviderResult {
   success: boolean;
@@ -40,13 +42,6 @@ function mapNetworkJusticeData(network: string, size: number): string {
   if (network === 'mtn') return 'MTN';
   if (network === 'telecel') return 'TELECEL';
   if (network === 'airteltigo') return size >= 15 ? 'AIRTELTIGO_BIGTIME' : 'AIRTELTIGO_ISHARE';
-  return network.toUpperCase();
-}
-
-function mapNetworkPensite(network: string, size: number): string {
-  if (network === 'mtn') return 'YELLO';
-  if (network === 'telecel') return 'TELECEL';
-  if (network === 'airteltigo') return size >= 15 ? 'AT_BIGTIME' : 'AT_PREMIUM';
   return network.toUpperCase();
 }
 
@@ -121,32 +116,6 @@ async function placeJusticeDataOrder(payload: OrderPayload): Promise<ProviderRes
     return { success: true, data: { ...data, _provider: 'justicedata', _network_key: networkKey } };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'JusticeData unknown error' };
-  }
-}
-
-// ─── Provider: Pensite ────────────────────────────────────────────────────────
-async function placePensiteOrder(payload: OrderPayload): Promise<ProviderResult> {
-  const apiKey = Deno.env.get("PENSITE_API_KEY");
-  if (!apiKey) return { success: false, error: "Pensite API key not configured" };
-
-  const networkKey = mapNetworkPensite(payload.network, payload.bundleSize);
-  try {
-    console.log(`[Pensite] Placing order ${payload.orderId} — ${payload.network} ${payload.bundleSize}GB -> ${payload.phone}`);
-    const response = await fetch("https://pensitegh.com/api/purchase", {
-      method: 'POST',
-      headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ networkKey, recipient: payload.phone, capacity: payload.bundleSize })
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      return { success: false, error: `Pensite HTTP ${response.status}: ${errorText}` };
-    }
-    const data = await response.json();
-    if (data.status !== 'success') return { success: false, error: `Pensite error: ${data.message || 'Unknown error'}` };
-    console.log(`[Pensite] Success:`, JSON.stringify(data));
-    return { success: true, data: { ...data, _provider: 'pensite', _network_key: networkKey } };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : 'Pensite unknown error' };
   }
 }
 
@@ -414,8 +383,8 @@ async function placeOrder(
   let result: ProviderResult;
 
   switch (provider) {
-    case 'pensite':
-      result = await placePensiteOrder(payload);
+    case 'dataspark':
+      result = await placeDatasparkOrder(payload);
       break;
     case 'hubnet':
       result = await placeHubnetOrder(payload);
@@ -595,12 +564,15 @@ serve(async (req) => {
     }
 
   order_id = generateOrderId();
+  // Which site the order came from; if that is unknown, fall back to the buyer's own domain so it is never left blank.
+  const orderDomain = sourceDomainFromRequest(req) ?? await sourceDomainForUser(supabase, user_id);
   const description =
   `${network.toUpperCase()} ${bundleSize}GB Data Purchase`;
 
-await supabase
+const { error: txnInsertError } = await supabase
   .from('transactions')
   .upsert({
+      source_domain: orderDomain,
     userid: user_id,
 
     amount: -finalPrice,
@@ -626,9 +598,19 @@ await supabase
   }, {
     onConflict: 'idempotency_key',
   });
-  await supabase
+  if (txnInsertError) {
+    // Previously ignored: the wallet was still debited and the order still sent,
+    // but no transaction row existed, so nothing showed in history or the admin portal.
+    console.error('[buy-data] transactions upsert FAILED — aborting before debit:', JSON.stringify(txnInsertError));
+    return new Response(
+      JSON.stringify({ status: false, message: 'Could not record your order. You have not been charged. Please try again.' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+  const { error: orderInsertError } = await supabase
   .from('adminorders')
   .upsert({
+      source_domain: orderDomain,
     userid: user_id,
 
     order_reference: order_id,
@@ -658,6 +640,14 @@ await supabase
   }, {
     onConflict: 'order_reference',
   });
+  if (orderInsertError) {
+    console.error('[buy-data] adminorders upsert FAILED — aborting before debit:', JSON.stringify(orderInsertError));
+    await supabase.from('transactions').delete().eq('idempotency_key', order_id);
+    return new Response(
+      JSON.stringify({ status: false, message: 'Could not record your order. You have not been charged. Please try again.' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
     // Deduct wallet with optimistic lock (version)
     const newBalance = parseFloat((currentBalance - finalPrice).toFixed(2));
     const { error: walletUpdateError } = await supabase

@@ -15,6 +15,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkRateLimit, getClientIp } from "../_shared/rate-limit.ts";
+import { sourceDomainFromValue } from '../_shared/source-domain.ts';
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -104,8 +105,8 @@ serve(async (req) => {
         .select(`
           id, name, owner_id, description,
           support_phone, whatsapp_support, whatsapp_group,
-          theme_color, short_code,
-          users!owner_id ( email )
+          theme_color, short_code, source_domain,
+          users!owner_id ( email, source_domain )
         `)
         .eq("owner_id", ownerIdToQuery)
         .eq("status", "active")
@@ -122,9 +123,16 @@ serve(async (req) => {
       // Flatten the joined users row into a top-level owner_email field.
       // The store.html client reads storeData.owner_email directly.
       const ownerEmail = (data as any).users?.email ?? null;
-      const { users: _drop, ...storeFields } = data as any;
+      const { users: _drop, source_domain: _storeDomain, ...storeFields } = data as any;
 
-      return json({ success: true, store: { ...storeFields, owner_email: ownerEmail } });
+      // The store's "home" domain is its owner's domain (falling back to the domain it was created on).
+      // store.html sends visitors there if they opened the link on the other domain, so the page,
+      // the payment and the settlement account always belong together.
+      const homeDomain = sourceDomainFromValue((data as any).users?.source_domain)
+                      ?? sourceDomainFromValue(_storeDomain)
+                      ?? null;
+
+      return json({ success: true, store: { ...storeFields, owner_email: ownerEmail, home_domain: homeDomain } });
     } catch (e: any) {
       console.error("get-store-data info exception:", e?.message ?? e);
       return json({ success: false, message: "Internal server error" }, 500);

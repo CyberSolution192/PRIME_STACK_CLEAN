@@ -294,7 +294,7 @@ Deno.serve(async (req) => {
       case "store": {
         const { data, error } = await supabase
           .from("stores")
-          .select("id, name, slug, short_code, status, theme_color, support_phone, whatsapp_support, whatsapp_group, updated_at")
+          .select("id, name, slug, short_code, status, theme_color, support_phone, whatsapp_support, whatsapp_group, updated_at, source_domain")
           .eq("owner_id", user.id)
           .maybeSingle();
 

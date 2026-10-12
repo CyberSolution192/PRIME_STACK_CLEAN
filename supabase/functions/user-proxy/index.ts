@@ -11,6 +11,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rate-limit.ts';
+import { sourceDomainFromRequest } from '../_shared/source-domain.ts';
 
 const SUPABASE_URL      = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -47,6 +48,7 @@ const ALLOWED_TARGETS = new Set([
 
 const ALLOWED_ORIGINS = new Set([
   'https://primeconnect.site',
+  'https://www.richsondatahub.store',
   ...( IS_PRODUCTION ? [] : [
     'http://127.0.0.1:5500',
     'http://127.0.0.1:5501',
@@ -65,7 +67,7 @@ const CORS_HEADERS = {
   'Vary': 'Origin',
 };
 
-const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):\d+$/;
+const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):55\d\d$/;
 
 function getAllowedOrigin(req: Request): string {
   const origin = req.headers.get('Origin') ?? '';
@@ -250,6 +252,10 @@ Deno.serve(async (req: Request) => {
     ? `${FUNCTIONS_BASE}/${targetFn}?${targetQuery}`
     : `${FUNCTIONS_BASE}/${targetFn}`;
 
+  // The target function is called server-to-server, so it never sees the customer's browser Origin.
+  // Pass the (validated) domain along so orders can be labelled with the site they came from.
+  const sourceDomain = sourceDomainFromRequest(req);
+
   let targetRes: Response;
   try {
     targetRes = await fetch(targetUrl, {
@@ -258,6 +264,7 @@ Deno.serve(async (req: Request) => {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${sessionData.access_token}`,
         'apikey':        SUPABASE_ANON_KEY,
+        ...(sourceDomain ? { 'x-source-domain': sourceDomain } : {}),
       },
       body: JSON.stringify(requestBody),
     });

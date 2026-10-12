@@ -37,6 +37,41 @@ const SUPABASE_URL      = 'https://rpolemxgussziexdmdxe.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwb2xlbXhndXNzemlleGRtZHhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwMjcxNjMsImV4cCI6MjA4NTYwMzE2M30.y6W9tq6X_XG7x5DYwAi-s1m83DNyVoh9fxDIOUcI8eM';
 
 export const PAYSTACK_PUBLIC_KEY  = 'pk_live_ab6a5a8a637a287d763a910af6e44136f779a93b';
+
+// ── Paystack settlement routing ─────────────────────────────────────────────
+// A domain listed here settles to its own Paystack subaccount; any domain NOT
+// listed settles to the main account. Codes are public identifiers (they cannot
+// move money), but they only work with the Paystack account that created them.
+//
+// Keep PAYSTACK_ROUTING_ENABLED = false until the main account is the Richson
+// account (its public key above, its secret key and webhook on the server).
+// Turning it on earlier would make payments on a routed domain fail.
+export const PAYSTACK_ROUTING_ENABLED = false;
+
+// Domains that share this backend. A store always lives on its owner's domain (see store-main.js).
+export const KNOWN_DOMAINS = ['primeconnect.site', 'www.richsondatahub.store'];
+
+// Account locking: a customer's account lives on the domain they signed up on. If they are on the
+// other domain, send them to their own (same page unless `target` is given). Only ever moves between
+// our known domains, so it cannot be used to send anyone elsewhere. Returns true when it is redirecting.
+export function redirectToHomeDomain(home, target) {
+  const here = window.location.hostname;
+  if (!home || home === here || !KNOWN_DOMAINS.includes(home) || !KNOWN_DOMAINS.includes(here)) return false;
+  const dest = target || (window.location.pathname + window.location.search + window.location.hash);
+  window.location.replace(`https://${home}${dest.startsWith('/') ? dest : '/' + dest}`);
+  return true;
+}
+export const PAYSTACK_SUBACCOUNTS = {
+  'primeconnect.site': 'ACCT_2r3tj8n4xz7s8sk',
+};
+
+/** Extra Paystack popup options for the page's domain ({} when routing is off or the domain has none). */
+export function paystackRouting(hostname = window.location.hostname) {
+  if (!PAYSTACK_ROUTING_ENABLED) return {};
+  const subaccount = PAYSTACK_SUBACCOUNTS[hostname];
+  // The subaccount bears Paystack's fee, so the main account is not charged fees on money it never receives.
+  return subaccount ? { subaccount, bearer: 'subaccount' } : {};
+}
 export const SUPABASE_PROJECT_URL = SUPABASE_URL;
 export const SUPABASE_ANON        = SUPABASE_ANON_KEY;
 

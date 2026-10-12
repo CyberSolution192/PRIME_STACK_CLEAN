@@ -9,6 +9,9 @@
  * Body: { action: "list-products"|"update-product"|"list-orders", ... }
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requestedDomain, scopeReads } from '../_shared/domain-scope.ts';
+import { partnerAllowed } from '../_shared/partner-access.ts';
+import { sourceDomainFromValue } from '../_shared/source-domain.ts';
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -31,7 +34,7 @@ async function verifyAdmin(req: Request) {
   const userId = req.headers.get("x-admin-user-id");
   const role = req.headers.get("x-admin-role");
   if (!userId || !role) return { user: null };
-  if (!["admin", "superadmin"].includes(role)) return { user: null };
+  if (!["admin", "superadmin", "partner"].includes(role)) return { user: null };
   return { user: { id: userId } };
 }
 
@@ -55,7 +58,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ success: false, message: "Method not allowed" }, 405);
 
-  const supabase = createClient(
+  let supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
@@ -77,6 +80,19 @@ Deno.serve(async (req) => {
   }
 
   const { action } = body;
+  // Admin portal domain filter: read actions only; unknown/"all" = no filter.
+  // Partner accounts: forced to their own domain (from the proxy, which read it from the database),
+  // allowlisted read actions only. Admin/superadmin may pick any domain or All.
+  const isPartner = req.headers.get("x-admin-role") === "partner";
+  const partnerDomain = isPartner ? sourceDomainFromValue(req.headers.get("x-admin-domain")) : undefined;
+  if (isPartner && (!partnerDomain || !partnerAllowed("admin-manage-checkers", action))) {
+    return json({ success: false, message: "Not permitted for this account" }, 403);
+  }
+  const scopedDomain = isPartner ? partnerDomain : requestedDomain(body);
+  if (isPartner || ["list-orders"].includes(action as string)) {
+    supabase = scopeReads(supabase, scopedDomain, ["checker_orders"]);
+  }
+
 
   try {
     switch (action) {

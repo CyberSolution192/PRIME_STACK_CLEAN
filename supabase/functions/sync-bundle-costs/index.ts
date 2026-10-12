@@ -1,7 +1,7 @@
 /**
  * sync-bundle-costs — Supabase Edge Function
  *
- * Pulls current bundle costs from each configured provider (Up2u, Bundle Zone GH)
+ * Pulls current bundle costs from each configured provider (Up2u, Bundle Zone GH, Dataspark)
  * and records what they currently charge us (cost_price) into
  * provider_bundle_costs. Never touches `bundles.price` (what we charge
  * customers) — that stays fully admin-controlled.
@@ -32,6 +32,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { raiseAlert } from "../_shared/admin-alerts.ts";
+import { listDatasparkBundles, datasparkSizeGb } from "../_shared/dataspark.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -158,9 +159,33 @@ async function fetchBundleZoneGhBundles(): Promise<NormalizedBundle[] | null> {
     .filter((b: NormalizedBundle | null): b is NormalizedBundle => b !== null);
 }
 
+//  Provider: Dataspark 
+// GET /bundles returns "your price" (custom pricing applied) = our cost_price.
+async function fetchDatasparkBundles(): Promise<NormalizedBundle[] | null> {
+  const bundles = await listDatasparkBundles();
+  if (bundles === null) {
+    console.error("[sync-bundle-costs] Dataspark bundle fetch failed or API key not configured  skipping");
+    return null;
+  }
+  return bundles
+    .map((b) => {
+      const sizeGb = datasparkSizeGb(b);
+      const costPrice = parseFloat(String(b.price));
+      if (!b.network || sizeGb === null || isNaN(costPrice)) return null;
+      return {
+        network: normalizeNetworkKey(String(b.network)),
+        sizeGb: Math.round(sizeGb),
+        validity: parseValidity(b.validity || "30 days"),
+        costPrice,
+      };
+    })
+    .filter((b: NormalizedBundle | null): b is NormalizedBundle => b !== null);
+}
+
 const PROVIDERS: { name: string; fetch: () => Promise<NormalizedBundle[] | null> }[] = [
   { name: "up2u", fetch: fetchUp2uBundles },
   { name: "bundlezonegh", fetch: fetchBundleZoneGhBundles },
+  { name: "dataspark", fetch: fetchDatasparkBundles },
 ];
 
 serve(async (req) => {

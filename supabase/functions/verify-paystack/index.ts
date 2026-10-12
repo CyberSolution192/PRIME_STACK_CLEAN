@@ -17,6 +17,8 @@
 
 import { serve }        from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { sourceDomainFromRequest } from '../_shared/source-domain.ts';
+import { checkSubaccountRouting } from '../_shared/paystack-routing.ts';
 
 const SUPABASE_URL              = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -26,6 +28,7 @@ const IS_PRODUCTION = Deno.env.get("ENVIRONMENT") === "production";
 
 const ALLOWED_ORIGINS = new Set([
   'https://primeconnect.site',
+  'https://www.richsondatahub.store',
   'http://127.0.0.1:5500',
   'http://127.0.0.1:5501',
   'http://127.0.0.1:5503',
@@ -34,7 +37,7 @@ const ALLOWED_ORIGINS = new Set([
   'http://localhost:5503',
 ]);
 
-const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):\d+$/;
+const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):55\d\d$/;
 
 function getAllowedOrigin(req: Request): string {
   const origin = req.headers.get('Origin') ?? '';
@@ -112,6 +115,7 @@ serve(async (req: Request) => {
     const { error: claimError } = await supabase
       .from('paystack_verifications')
       .insert({
+      source_domain: sourceDomainFromRequest(req),
         user_id:                   user.id,
         reference,
         status:                    'pending',
@@ -121,7 +125,38 @@ serve(async (req: Request) => {
         updated_at:                new Date().toISOString(),
       });
 
+    if (claimError && claimError.code !== '23505') {
+      // Not a duplicate — a real database problem. This used to be treated as
+      // "already being processed" (409), hiding the true error forever.
+      console.error('paystack_verifications claim insert FAILED (not a duplicate):', JSON.stringify(claimError));
+      return jsonResponse({ success: false, message: 'Could not start payment verification. Please contact support with reference ' + reference }, 500, req);
+    }
+
+    // A previous attempt that FAILED (Paystack could not confirm it yet, or the credit step errored)
+    // must be retryable. Before, every retry got 409 forever and the wallet stayed uncredited.
+    let reclaimed = false;
     if (claimError) {
+      const { data: prev } = await supabase
+        .from('paystack_verifications')
+        .select('processed, status')
+        .eq('reference', reference)
+        .maybeSingle();
+      if (prev && !prev.processed && (prev.status === 'failed' || prev.status === 'rpc_failed')) {
+        const { data: won } = await supabase
+          .from('paystack_verifications')
+          .update({ status: 'pending', updated_at: new Date().toISOString() })
+          .eq('reference', reference)
+          .eq('processed', false)
+          .in('status', ['failed', 'rpc_failed'])
+          .select('reference');
+        if (won && won.length > 0) {
+          reclaimed = true;
+          console.log(`Re-claimed previously failed verification: ${reference}`);
+        }
+      }
+    }
+
+    if (claimError && !reclaimed) {
      const { data: existing } = await supabase
    .from('paystack_verifications')
    .select(`
@@ -192,6 +227,8 @@ await supabase
         message: 'Payment not successful or could not be verified',
       }, 400, req);
     }
+
+    await checkSubaccountRouting(supabase, verifyData.data, sourceDomainFromRequest(req));
 
     const paystackGross = verifyData.data.amount / 100; // kobo → GHS (e.g. 1.04)
     const TOLERANCE     = 0.02; // GH₵ rounding tolerance
@@ -291,6 +328,22 @@ await supabase
         updated_at:        new Date().toISOString(),
       })
       .eq('reference', reference);
+
+    // Safety: if this reference already produced a wallet transaction (e.g. the webhook got there
+    // first, or an earlier attempt committed but reported an error), never credit it a second time.
+    const { data: alreadyCredited } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('userid', user.id)
+      .eq('details->>payment_reference', reference)
+      .maybeSingle();
+    if (alreadyCredited) {
+      await supabase
+        .from('paystack_verifications')
+        .update({ processed: true, status: 'credited', updated_at: new Date().toISOString() })
+        .eq('reference', reference);
+      return jsonResponse({ success: true, duplicate: true, message: 'Payment already credited' }, 200, req);
+    }
 
     // Credit the wallet via DB RPC
     const { data: result, error: rpcError } = await supabase.rpc('process_paystack_payment', {

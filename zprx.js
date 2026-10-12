@@ -37,7 +37,98 @@
   window._adminFetch = _adminFetch;
 
   // has expired, we drop back to the login form immediately.
+  // ── Admin domain filter ───────────────────────────────────────────────────
+  // The selected domain lives in memory only, so every fresh login/page load
+  // starts on "All Domains". The server validates the value again and applies
+  // it to read actions only.
+  const DOMAIN_FILTERED_FUNCTIONS = new Set([
+    'admin-manage-orders', 'admin-manage-users', 'admin-manage-withdrawals',
+    'admin-manage-stores', 'admin-manage-api-keys', 'admin-manage-checkers',
+  ]);
+  window._adminDomainFilter = 'all';
+
+  // ── Partner accounts ──────────────────────────────────────────────────────
+  // A partner sees only these pages and can call only these actions. This mirrors the
+  // server-side allowlist (_shared/partner-access.ts) so the page stays quiet instead of
+  // showing errors; the SERVER is what actually enforces it.
+  const PARTNER_PAGES = new Set([
+    'dashboard', 'analytics', 'all-orders', 'user-orders', 'guest-orders', 'store-sales',
+    'users', 'user-profits', 'withdrawals', 'manage-stores', 'checkers', 'custom-pricing',
+  ]);
+  const PARTNER_ALLOWED_ACTIONS = {
+    'admin-manage-orders':      ['list', 'get-stats', 'get-dashboard-stats', 'get-analytics', 'export-csv', 'export-pdf', 'update-status'],
+    'admin-manage-users':       ['list', 'get-stats', 'list-full', 'get-reseller-profits', 'get-my-profile', 'get-master-data', 'get-user-prices', 'set-bundle-prices', 'reset-bundle-price'],
+    'admin-manage-withdrawals': ['list', 'approve', 'reject', 'mark-sent'],
+    'admin-manage-stores':      ['list'],
+    'admin-manage-checkers':    ['list-orders'],
+  };
+  const _isPartner = () => window._adminRole === 'partner';
+
+  function _applyPartnerUI(domain) {
+    document.querySelectorAll('[data-page]').forEach((el) => {
+      if (!PARTNER_PAGES.has(el.dataset.page)) el.classList.add('hidden');
+    });
+    document.querySelectorAll('.domain-filter-select').forEach((sel) => sel.classList.add('hidden'));
+    const badge = document.getElementById('partner-domain-badge');
+    if (badge) { badge.textContent = domain ? `Domain: ${domain}` : 'Partner'; badge.classList.remove('hidden'); }
+    document.querySelectorAll('#notification-btn, #notification-btn-mobile').forEach((el) => el.classList.add('hidden'));
+  }
+
+  function _applyDomainSelectState() {
+    const v = window._adminDomainFilter || 'all';
+    document.querySelectorAll('.domain-filter-select').forEach((sel) => {
+      if (sel.value !== v) sel.value = v;
+      sel.classList.toggle('is-filtered', v !== 'all');
+    });
+  }
+
+  async function loadAdminDomains() {
+    try {
+      const res  = await _adminFetch('admin-manage-orders', { action: 'get-domains' });
+      const data = await res.json();
+      if (!data.success || !Array.isArray(data.domains)) return;
+      document.querySelectorAll('.domain-filter-select').forEach((sel) => {
+        sel.textContent = '';
+        const all = document.createElement('option');
+        all.value = 'all'; all.textContent = 'All Domains';
+        sel.appendChild(all);
+        data.domains.forEach((d) => {
+          const o = document.createElement('option');
+          o.value = d.host; o.textContent = d.label || d.host;
+          sel.appendChild(o);
+        });
+      });
+      _applyDomainSelectState();
+    } catch (e) {
+      console.warn('[admin] could not load domain list', e);
+    }
+  }
+
+  document.addEventListener('change', (e) => {
+    const sel = e.target && e.target.closest ? e.target.closest('.domain-filter-select') : null;
+    if (!sel) return;
+    window._adminDomainFilter = sel.value || 'all';
+    _applyDomainSelectState();
+    // Reload whichever tab is open with the new filter.
+    const active = document.querySelector('.admin-nav-btn.admin-nav-active');
+    if (active && window.admin && typeof window.admin.navigateTo === 'function') {
+      window.admin.navigateTo(active.dataset.page);
+    }
+  });
+
   async function _adminFetch(targetFunction, body) {
+    if (_isPartner()) {
+      const allowed = (PARTNER_ALLOWED_ACTIONS[targetFunction] || []).includes(body && body.action);
+      if (!allowed) {
+        return new Response(JSON.stringify({ success: false, message: 'Not available for this account' }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } });
+      }
+    }
+    const dom = window._adminDomainFilter;
+    if (dom && dom !== 'all' && DOMAIN_FILTERED_FUNCTIONS.has(targetFunction) &&
+        body && typeof body === 'object' && !Array.isArray(body) && body.domain === undefined) {
+      body = { ...body, domain: dom };
+    }
     const res = await adminFetch(targetFunction, body);
     if (res.status === 401) {
       let data = {};
@@ -177,6 +268,7 @@
 
     // Navigation
     function navigateTo(page) {
+      if (_isPartner() && !PARTNER_PAGES.has(page)) page = 'dashboard';
       // Stop analytics auto-refresh whenever admin leaves the analytics page
       stopAnalyticsAutoRefresh();
       if (_adminReady) loadOrderStats(); 
@@ -303,7 +395,8 @@
           loadRevenueStats(),
           loadUserStats(),
           loadOrderStats(),
-          loadRecentOrders()
+          loadRecentOrders(),
+          loadDomainSummary()
         ]);
         updateLastUpdated('stats-last-updated');
       } catch (error) {
@@ -311,6 +404,43 @@
         showToast('Failed to load dashboard data', 'error');
       }
     }
+
+   // Revenue by domain (owner only). Partners never see this card.
+   async function loadDomainSummary() {
+      const card = document.getElementById('domain-summary-card');
+      const body = document.getElementById('domain-summary-body');
+      if (!card || !body) return;
+      if (_isPartner()) { card.classList.add('hidden'); return; }
+      try {
+        const res = await _adminFetch('admin-manage-orders', { action: 'get-domain-summary' });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || 'Failed');
+        const money = (n) => 'GH₵ ' + Number(n || 0).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        body.textContent = '';
+        (data.domains || []).forEach((d) => {
+          const tr = document.createElement('tr');
+          tr.className = 'border-t border-slate-100';
+          const cells = [d.label || d.host, String(d.orders), money(d.today), money(d.d7), money(d.d30), money(d.all), String(d.attention)];
+          cells.forEach((text, i) => {
+            const td = document.createElement('td');
+            td.className = 'px-3 py-2.5 ' + (i === 0 ? 'text-left font-medium text-slate-700' : 'text-right text-slate-600');
+            if (i === 6 && d.attention > 0) td.className += ' text-red-500 font-semibold';
+            td.textContent = text;
+            tr.appendChild(td);
+          });
+          body.appendChild(tr);
+        });
+        if (!body.children.length) {
+          body.innerHTML = '<tr><td colspan="7" class="px-3 py-4 text-center text-slate-400">No data yet</td></tr>';
+        }
+      } catch (e) {
+        console.error('Error loading domain summary:', e);
+        body.textContent = '';
+        const tr = document.createElement('tr'); const td = document.createElement('td');
+        td.colSpan = 7; td.className = 'px-3 py-4 text-center text-red-500'; td.textContent = 'Could not load the domain summary';
+        tr.appendChild(td); body.appendChild(tr);
+      }
+   }
 
    async function loadRevenueStats() { /* merged into loadOrderStats via edge fn */ }
    async function loadUserStats()    { /* merged into loadOrderStats via edge fn */ }
@@ -1284,7 +1414,7 @@ const statusColor =
     // ── Provider Settings ─────────────────────────────────────────────────────
     const PROVIDER_LABELS = {
       justicedata:  'Justice Data Shop',
-      pensite:      'Pensite GH',
+      dataspark:    'Dataspark',
       hubnet:       'Hubnet',
       sparkdata:    'Spark Data GH',
       databosshub:  'DataBossHub',
@@ -2895,6 +3025,7 @@ document.querySelectorAll('.admin-nav-btn').forEach(btn => {
             case 'submit-manual-order':     window.admin.submitManualOrder(); return;
             case 'check-sms-balance':       checkSMSBalance(); return;
             case 'refresh-sms-providers':   loadSMSProviders(); return;
+            case 'refresh-domain-summary':  loadDomainSummary(); return;
             case 'switch-sms-provider':     switchSMSProvider(arg); return;
             case 'switch-sms-tab':          switchSMSTab(arg); return;
             case 'preview-sms-recipients':  previewSMSRecipients(); return;
@@ -3264,7 +3395,7 @@ if (target.closest('#logout-btn')) {
           email:    restoredUser.email,
         };
 
-        if (profile.role !== 'admin' && profile.role !== 'superadmin') {
+        if (profile.role !== 'admin' && profile.role !== 'superadmin' && profile.role !== 'partner') {
           console.log('Non-admin session — showing access denied');
           // Immediately revoke — non-admins should not hold a session at all.
           await adminLogout().catch(() => {});
@@ -3290,7 +3421,14 @@ if (target.closest('#logout-btn')) {
 
         console.log('User is admin, proceeding with initialization');
         _adminReady = true; // unlock data-loading functions
+        window._adminDomainFilter = 'all';   // each login starts on All Domains
         window._adminRole = profile?.role ?? 'admin'; // used by security logs clear button
+        if (_isPartner()) {
+          _applyPartnerUI(restoredUser.partner_domain);   // locked to one domain, limited pages
+        } else {
+          _applyDomainSelectState();
+          loadAdminDomains();
+        }
         // Show clear button if superadmin
         const secClearBtn = document.getElementById('sec-clear-btn');
         if (secClearBtn && profile?.role === 'superadmin') secClearBtn.classList.remove('hidden');
@@ -3325,7 +3463,7 @@ if (target.closest('#logout-btn')) {
         // Real-time: notify admin instantly when a new store is unlocked.
         // Guard with _realtimeBound so init() being called twice (login flow)
         // never tries to subscribe the same channel twice.
-        if (!state._realtimeBound) {
+        if (!state._realtimeBound && !_isPartner()) {   // partners never subscribe to cross-domain events
           state._realtimeBound = true;
           supabaseClient
             .channel('new-stores')
@@ -5088,6 +5226,7 @@ rejectWithdrawal: async function(id) {
     // (e.g. after a failed login attempt) never stack duplicate event listeners.
     let _loginBound = false;
     window.showAdminLoginForm = function() {
+      window._adminDomainFilter = 'all';   // never carry a filter into the next login
       document.getElementById('admin-spinner').classList.add('hidden');
       document.getElementById('admin-login-panel').classList.remove('hidden');
 

@@ -19,6 +19,7 @@
 
 import { serve }        from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { USER_OTP_MODE, issueLocalOtp, checkLocalOtp } from '../_shared/user-otp.ts';
 
 const SUPABASE_URL     = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -108,7 +109,7 @@ serve(async (req) => {
   if (!profile.phone) {
     return json({ success: false, message: 'No phone number on file. Contact support to reset your PIN.' }, 400);
   }
-  if (!ARKESEL_API_KEY) {
+  if (USER_OTP_MODE !== 'local' && !ARKESEL_API_KEY) {
     return json({ success: false, message: 'SMS service not configured. Contact support.' }, 500);
   }
 
@@ -125,24 +126,36 @@ serve(async (req) => {
 
     const formattedPhone = formatPhoneForArkesel(profile.phone);
 
-    const otpRes = await fetch('https://sms.arkesel.com/api/otp/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'api-key': ARKESEL_API_KEY },
-      body: JSON.stringify({
-        expiry:    OTP_EXPIRY_MIN,
-        length:    6,
-        medium:    'sms',
-        type:      'numeric',
-        message:   'Your PIN reset code is %otp_code%. Expires in %expiry% minutes. Do not share this code with anyone.',
-        number:    formattedPhone,
-        sender_id: ARKESEL_SENDER,
-      }),
-    });
-    const otpData = await otpRes.json() as Record<string, unknown>;
+    if (USER_OTP_MODE === 'local') {
+      const sent = await issueLocalOtp(
+        db, 'pin_reset', user.id, formattedPhone,
+        (code, mins) => `Your PIN reset code is ${code}. Expires in ${mins} minutes. Do not share this code with anyone.`,
+      );
+      if (!sent.ok) {
+        console.error('[reset-transaction-pin] OTP send failed:', sent.error);
+        return json({ success: false, message: 'Failed to send OTP. Please try again.' }, 500);
+      }
+    } else {
 
-    if (otpData.code !== '1000') {
-      console.error('[reset-transaction-pin] OTP send failed:', otpData);
-      return json({ success: false, message: 'Failed to send OTP. Please try again.' }, 500);
+      const otpRes = await fetch('https://sms.arkesel.com/api/otp/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'api-key': ARKESEL_API_KEY },
+        body: JSON.stringify({
+          expiry:    OTP_EXPIRY_MIN,
+          length:    6,
+          medium:    'sms',
+          type:      'numeric',
+          message:   'Your PIN reset code is %otp_code%. Expires in %expiry% minutes. Do not share this code with anyone.',
+          number:    formattedPhone,
+          sender_id: ARKESEL_SENDER,
+        }),
+      });
+      const otpData = await otpRes.json() as Record<string, unknown>;
+
+      if (otpData.code !== '1000') {
+        console.error('[reset-transaction-pin] OTP send failed:', otpData);
+        return json({ success: false, message: 'Failed to send OTP. Please try again.' }, 500);
+      }
     }
 
     await db.from('users').update({ pin_reset_requested_at: new Date().toISOString() }).eq('id', user.id);
@@ -171,25 +184,43 @@ serve(async (req) => {
 
     const formattedPhone = formatPhoneForArkesel(profile.phone);
 
-    const verifyRes = await fetch('https://sms.arkesel.com/api/otp/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'api-key': ARKESEL_API_KEY },
-      body: JSON.stringify({ code: otp, number: formattedPhone }),
-    });
-    const verifyData = await verifyRes.json() as Record<string, unknown>;
+    if (USER_OTP_MODE === 'local') {
+      const result = await checkLocalOtp(db, 'pin_reset', user.id, otp);
+      if (result !== 'ok') {
+        const reason = result === 'expired' ? 'OTP has expired. Please request a new one.' :
+                       result === 'locked'  ? 'Too many incorrect codes. Please request a new one.' :
+                       'Invalid OTP code. Please try again.';
+        try {
+          await db.from('audit_logs').insert({
+            user_id: user.id, action: 'pin_reset_otp_failed',
+            ip_address: req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown',
+            metadata: { mode: 'local', result }, created_at: new Date().toISOString(),
+          });
+        } catch (_) { /* non-fatal */ }
+        return json({ success: false, message: reason }, result === 'locked' ? 429 : 400);
+      }
+    } else {
 
-    if (verifyData.code !== '1100') {
-      const reason = verifyData.code === '1105' ? 'OTP has expired. Please request a new one.' :
-                     verifyData.code === '1104' ? 'Invalid OTP code. Please try again.' :
-                     'OTP verification failed. Please try again.';
-      try {
-        await db.from('audit_logs').insert({
-          user_id: user.id, action: 'pin_reset_otp_failed',
-          ip_address: req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown',
-          metadata: { arkesel_code: verifyData.code }, created_at: new Date().toISOString(),
-        });
-      } catch (_) { /* non-fatal */ }
-      return json({ success: false, message: reason }, 400);
+      const verifyRes = await fetch('https://sms.arkesel.com/api/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'api-key': ARKESEL_API_KEY },
+        body: JSON.stringify({ code: otp, number: formattedPhone }),
+      });
+      const verifyData = await verifyRes.json() as Record<string, unknown>;
+
+      if (verifyData.code !== '1100') {
+        const reason = verifyData.code === '1105' ? 'OTP has expired. Please request a new one.' :
+                       verifyData.code === '1104' ? 'Invalid OTP code. Please try again.' :
+                       'OTP verification failed. Please try again.';
+        try {
+          await db.from('audit_logs').insert({
+            user_id: user.id, action: 'pin_reset_otp_failed',
+            ip_address: req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown',
+            metadata: { arkesel_code: verifyData.code }, created_at: new Date().toISOString(),
+          });
+        } catch (_) { /* non-fatal */ }
+        return json({ success: false, message: reason }, 400);
+      }
     }
 
     // OTP verified — set the new PIN, clear any lockout/attempts state.

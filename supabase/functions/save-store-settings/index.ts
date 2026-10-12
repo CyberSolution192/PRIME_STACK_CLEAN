@@ -16,6 +16,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { rejectUnsafeChars } from "../_shared/input-sanitize.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { sourceDomainFromRequest, sourceDomainForUser } from '../_shared/source-domain.ts';
 
 function isValidHex(hex: string): boolean {
   return /^#[0-9A-Fa-f]{6}$/.test(hex);
@@ -183,6 +184,7 @@ serve(async (req) => {
       const { error } = await supabase
         .from("stores")
         .insert({
+      source_domain: (await sourceDomainForUser(supabase, user.id)) ?? sourceDomainFromRequest(req),
           owner_id: user.id,
           slug,
           short_code,

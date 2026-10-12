@@ -14,6 +14,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { serve }        from 'https://deno.land/std@0.177.0/http/server.ts';
 import { crypto }       from 'https://deno.land/std@0.177.0/crypto/mod.ts';
+import { sourceDomainFromValue } from '../_shared/source-domain.ts';
 
 const SUPABASE_URL      = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -30,6 +31,7 @@ const IS_PRODUCTION = Deno.env.get("ENVIRONMENT") === "production";
 
 const ALLOWED_ORIGINS = new Set([
   "https://primeconnect.site",
+  "https://www.richsondatahub.store",
   // Local dev origins — automatically excluded in production
   ...( IS_PRODUCTION ? [] : [
     "http://127.0.0.1:5500",
@@ -54,9 +56,13 @@ async function generateSessionId(): Promise<string> {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):55\d\d$/;
+
 function getAllowedOrigin(req: Request): string {
   const origin = req.headers.get('Origin') ?? '';
-  return ALLOWED_ORIGINS.has(origin) ? origin : 'https://no-cors-for-you';
+  if (ALLOWED_ORIGINS.has(origin)) return origin;
+  if (!IS_PRODUCTION && LOCAL_DEV_ORIGIN_RE.test(origin)) return origin;
+  return 'https://no-cors-for-you';
 }
 
 function getClientIp(req: Request): string {
@@ -231,7 +237,7 @@ serve(async (req: Request) => {
 
     const { data: profile } = await db
       .from('users')
-      .select('role, fullname, email, phone, store_unlocked, transaction_pin_hash')
+      .select('role, fullname, email, phone, store_unlocked, transaction_pin_hash, source_domain')
       .eq('id', authData.session.user.id).single();
 
     if (profile?.role === 'admin' || profile?.role === 'superadmin') {
@@ -288,6 +294,8 @@ serve(async (req: Request) => {
         role:           profile?.role,
         store_unlocked: profile?.store_unlocked ?? false,
         pin_set:        !!profile?.transaction_pin_hash,
+        // The domain this account lives on; the login page sends the customer there if they are elsewhere.
+        home_domain:    sourceDomainFromValue(profile?.source_domain) ?? null,
       },
     }, 200, { 'Set-Cookie': setCookie(sessionId) }, req);
   }
@@ -398,7 +406,7 @@ serve(async (req: Request) => {
 
     const { data: verifyProfile } = await db
       .from('users')
-      .select('fullname, store_unlocked, transaction_pin_hash')
+      .select('fullname, store_unlocked, transaction_pin_hash, source_domain')
       .eq('id', session.user_id).single();
 
     // ── access_token intentionally omitted from this response ─────────────
@@ -410,6 +418,7 @@ serve(async (req: Request) => {
       store_unlocked: verifyProfile?.store_unlocked ?? false,
       pin_set:        !!verifyProfile?.transaction_pin_hash,
       fullname:       verifyProfile?.fullname ?? null,
+      home_domain:    sourceDomainFromValue(verifyProfile?.source_domain) ?? null,
     }, 200, {}, req);
   }
 

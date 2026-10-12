@@ -10,6 +10,9 @@
           userLogout,
           tryRestoreUserSession,
           PAYSTACK_PUBLIC_KEY,
+          paystackRouting,
+          KNOWN_DOMAINS,
+          redirectToHomeDomain,
           SUPABASE_PROJECT_URL,
           SUPABASE_ANON,
         } from './supabase-config.js';
@@ -173,6 +176,11 @@
                     if (!session) {
                         window.location.href = 'login.html';
                         throw new Error('No session');
+                    }
+                    // Account locking: an account lives on one domain. If this dashboard was opened on the
+                    // other one, move to the account's own domain and stop here (the page is navigating away).
+                    if (redirectToHomeDomain(session.home_domain)) {
+                        return new Promise(() => {});
                     }
                     // Pass through all fields returned by user-auth verify,
                     // including pin_set and store_unlocked — so init() has them
@@ -925,12 +933,14 @@ async function navigateTo(page) {
                 // Initialize Paystack payment with total amount (including charge)
                 const handler = PaystackPop.setup({
                     key: CONFIG.PAYSTACK_PUBLIC_KEY,
+                    ...paystackRouting(),   // per-domain settlement subaccount (off until the key switch)
                     email: state.user.email,
                     amount: totalAmount * 100,
                     currency: 'GHS',
                     ref: 'WALLET-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
                     channels: ['mobile_money'],
                     metadata: {
+                        source_domain: location.hostname,   // which domain this payment came from (reporting only)
                         user_id: state.user.id,
                         phone_number: phone,
                         network: network,
@@ -1330,8 +1340,8 @@ async function loadStorePage() {
     try {
       const { data: { user } } = await getAuthUser();
       const storeLink = _storeShortCode
-        ? `${_baseUrl}store?s=${_storeShortCode}`
-        : `${_baseUrl}store?slug=${user.id}`;
+        ? `${_storeBase()}store?s=${_storeShortCode}`
+        : `${_storeBase()}store?slug=${user.id}`;
       const openBtn = document.getElementById('openStoreBtn');
       if (openBtn) { openBtn.classList.remove('hidden'); openBtn.onclick = () => window.open(storeLink, '_blank', 'noopener,noreferrer'); }
     } catch(_) {}
@@ -1446,6 +1456,7 @@ async function loadStoreStats() {
 
     // Store the short_code for use by all link-building functions in this session
     _storeShortCode = storeData?.store?.short_code || null;
+    _storeHome = storeData?.store?.source_domain || _storeHome;
 
     // Update store display name from the actual stores table record
     const el6 = document.getElementById('storeDisplayName');
@@ -1886,8 +1897,8 @@ async function loadWithdrawalHistory() {
                 if (error || !user) throw new Error('No authentication token');
 
                 const storeLink = _storeShortCode
-                    ? `${_baseUrl}store?s=${_storeShortCode}`
-                    : `${_baseUrl}store?slug=${user.id}`;
+                    ? `${_storeBase()}store?s=${_storeShortCode}`
+                    : `${_storeBase()}store?slug=${user.id}`;
 
                 document.getElementById('storeLinkInput').value = storeLink;
                 document.getElementById('storeLinkSection').classList.remove('hidden');
@@ -1912,8 +1923,8 @@ async function loadWithdrawalHistory() {
         const { data: { user }, error } = await getAuthUser();
         if (error || !user) throw new Error('No authentication token');
         const trackLink = _storeShortCode
-            ? `${_baseUrl}store?s=${_storeShortCode}&track=1`
-            : `${_baseUrl}store?slug=${user.id}&track=1`;
+            ? `${_storeBase()}store?s=${_storeShortCode}&track=1`
+            : `${_storeBase()}store?slug=${user.id}&track=1`;
         await navigator.clipboard.writeText(trackLink).catch(() => {
             const ta = document.createElement('textarea');
             ta.value = trackLink; document.body.appendChild(ta);
@@ -2717,8 +2728,8 @@ async function copyOrderTrackLink(phone) {
   try {
     const { data: { user } } = await getAuthUser();
     const base = _storeShortCode
-      ? `${_baseUrl}store?s=${_storeShortCode}&track=1`
-      : `${_baseUrl}store?slug=${user.id}&track=1`;
+      ? `${_storeBase()}store?s=${_storeShortCode}&track=1`
+      : `${_storeBase()}store?slug=${user.id}&track=1`;
     const url = `${base}&phone=${encodeURIComponent(phone)}`;
     await navigator.clipboard.writeText(url).catch(() => {
       const ta = document.createElement('textarea');
@@ -2755,6 +2766,10 @@ window.copyOrderTrackLink    = copyOrderTrackLink;
 
 let _themeColor = '#0284c7';
 let _storeShortCode = null; // set by loadStoreStats; used by all store link builders
+let _storeHome = null;      // the store's own domain (its owner's domain); links are built on it
+function _storeBase() {
+    return (_storeHome && KNOWN_DOMAINS.includes(_storeHome)) ? `https://${_storeHome}/` : _baseUrl;
+}
 
 // Highlight a preset swatch and update preview
 window.selectPresetColor = function(btn) {
@@ -2797,6 +2812,7 @@ async function loadStoreCustomization() {
         const lcData = await lcRes.json();
         if (!lcData.success || !lcData.store) return;
         const store = lcData.store;
+        _storeHome = store.source_domain || _storeHome;
 
         const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
         setVal('customStoreName',       store.name);
@@ -2878,8 +2894,8 @@ window.saveStoreSettings = async function() {
         // Reveal Open Store button using the short link
         const { data: { user: u } } = await getAuthUser();
         const storeLink = _storeShortCode
-            ? `${_baseUrl}store?s=${_storeShortCode}`
-            : `${_baseUrl}store?slug=${u.id}`;
+            ? `${_storeBase()}store?s=${_storeShortCode}`
+            : `${_storeBase()}store?slug=${u.id}`;
         const openBtn = document.getElementById('openStoreBtn');
         if (openBtn) {
             openBtn.classList.remove('hidden');

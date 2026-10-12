@@ -1,4 +1,4 @@
-import { supabase as supabaseClient, userLogin, escapeHtml } from './supabase-config.js';
+import { supabase as supabaseClient, userLogin, escapeHtml, redirectToHomeDomain } from './supabase-config.js';
         
         // DOM Elements
         const loginForm = document.getElementById('login-form');
@@ -173,6 +173,12 @@ import { supabase as supabaseClient, userLogin, escapeHtml } from './supabase-co
                 
                 // Success! Authentication is complete
                 console.log('✅ User authenticated:', result.user.id);
+
+                // Account locking: if this account lives on the other domain, take the customer there.
+                if (redirectToHomeDomain(result.user.home_domain, '/dashboard.html')) {
+                    showToast('Taking you to your account...', 'success');
+                    return;
+                }
 
                 // Show success and redirect immediately
                 showToast('Login successful! Redirecting...', 'success');

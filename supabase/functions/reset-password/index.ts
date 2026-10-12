@@ -14,6 +14,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { serve }        from 'https://deno.land/std@0.177.0/http/server.ts';
 import { checkRateLimit, getClientIp } from '../_shared/rate-limit.ts';
+import { USER_OTP_MODE, issueLocalOtp, checkLocalOtp } from '../_shared/user-otp.ts';
 
 const SUPABASE_URL     = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -23,6 +24,7 @@ const IS_PRODUCTION    = Deno.env.get('ENVIRONMENT') === 'production';
 
 const ALLOWED_ORIGINS = new Set([
   'https://primeconnect.site',
+  'https://www.richsondatahub.store',
   ...(!IS_PRODUCTION ? [
     'http://127.0.0.1:5500', 'http://127.0.0.1:5501', 'http://127.0.0.1:5503',
     'http://localhost:5500',  'http://localhost:5501', 'http://localhost:5503',
@@ -30,9 +32,14 @@ const ALLOWED_ORIGINS = new Set([
   ] : []),
 ]);
 
+const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):55\d\d$/;
+
 function getAllowedOrigin(req: Request): string {
   const o = req.headers.get('Origin') ?? '';
-  return ALLOWED_ORIGINS.has(o) ? o : 'https://no-cors';
+  if (ALLOWED_ORIGINS.has(o)) return o;
+  // Local development on Live Server ports 5500-5599, never in production.
+  if (!IS_PRODUCTION && LOCAL_DEV_ORIGIN_RE.test(o)) return o;
+  return 'https://no-cors';
 }
 
 function corsHeaders(req: Request) {
@@ -104,29 +111,44 @@ serve(async (req: Request) => {
 
     const phone = formatPhone(user.phone);
 
-    // Send OTP via Arkesel
-    const otpRes = await fetch('https://sms.arkesel.com/api/otp/generate', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'api-key': ARKESEL_API_KEY },
-      body: JSON.stringify({
-        expiry:    5,
-        length:    6,
-        medium:    'sms',
-        message:   'PrimeConnect: Your password reset code is %otp_code%. Expires in %expiry% minutes. If you did not request this, ignore it.',
-        number:    phone,
-        sender_id: ARKESEL_SENDER,
-        type:      'numeric',
-      }),
-    });
-    const otpData = await otpRes.json() as Record<string, unknown>;
+    // Send the code: our own (USER_OTP_MODE=local, via the active SMS provider) or Arkesel's OTP service
+    if (USER_OTP_MODE === 'local') {
+      const sent = await issueLocalOtp(
+        db, 'password_reset', user.id, phone,
+        (code, mins) => `PrimeConnect: Your password reset code is ${code}. Expires in ${mins} minutes. If you did not request this, ignore this message.`,
+      );
+      if (!sent.ok) {
+        console.error('[reset-password] OTP send failed:', sent.error);
+        // Still return same message to prevent enumeration
+        return json({
+          success: true,
+          message: 'If that email is registered, an OTP has been sent to the associated phone number.',
+        }, 200, req);
+      }
+    } else {
+      const otpRes = await fetch('https://sms.arkesel.com/api/otp/generate', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'api-key': ARKESEL_API_KEY },
+        body: JSON.stringify({
+          expiry:    5,
+          length:    6,
+          medium:    'sms',
+          message:   'PrimeConnect: Your password reset code is %otp_code%. Expires in %expiry% minutes. If you did not request this, ignore it.',
+          number:    phone,
+          sender_id: ARKESEL_SENDER,
+          type:      'numeric',
+        }),
+      });
+      const otpData = await otpRes.json() as Record<string, unknown>;
 
-    if (otpData.code !== '1000') {
-      console.error('[reset-password] OTP send failed:', otpData);
-      // Still return same message to prevent enumeration
-      return json({
-        success: true,
-        message: 'If that email is registered, an OTP has been sent to the associated phone number.',
-      }, 200, req);
+      if (otpData.code !== '1000') {
+        console.error('[reset-password] OTP send failed:', otpData);
+        // Still return same message to prevent enumeration
+        return json({
+          success: true,
+          message: 'If that email is registered, an OTP has been sent to the associated phone number.',
+        }, 200, req);
+      }
     }
 
     // Return masked phone hint
@@ -162,19 +184,29 @@ serve(async (req: Request) => {
 
     const phone = formatPhone(user.phone);
 
-    // Verify OTP with Arkesel
-    const verifyRes = await fetch('https://sms.arkesel.com/api/otp/verify', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'api-key': ARKESEL_API_KEY },
-      body: JSON.stringify({ code: otp, number: phone }),
-    });
-    const verifyData = await verifyRes.json() as Record<string, unknown>;
+    // Verify the code: our own (local mode) or Arkesel's OTP service
+    if (USER_OTP_MODE === 'local') {
+      const result = await checkLocalOtp(db, 'password_reset', user.id, otp);
+      if (result !== 'ok') {
+        const error = result === 'expired' ? 'OTP has expired. Please request a new one.' :
+                      result === 'locked'  ? 'Too many incorrect codes. Please request a new one.' :
+                      'Invalid code. Please check and try again.';
+        return json({ success: false, error }, result === 'locked' ? 429 : 401, req);
+      }
+    } else {
+      const verifyRes = await fetch('https://sms.arkesel.com/api/otp/verify', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'api-key': ARKESEL_API_KEY },
+        body: JSON.stringify({ code: otp, number: phone }),
+      });
+      const verifyData = await verifyRes.json() as Record<string, unknown>;
 
-    if (verifyData.code !== '1100') {
-      const error = verifyData.code === '1105' ? 'OTP has expired. Please request a new one.' :
-                    verifyData.code === '1104' ? 'Invalid code. Please check and try again.' :
-                    'Verification failed. Please try again.';
-      return json({ success: false, error }, 401, req);
+      if (verifyData.code !== '1100') {
+        const error = verifyData.code === '1105' ? 'OTP has expired. Please request a new one.' :
+                      verifyData.code === '1104' ? 'Invalid code. Please check and try again.' :
+                      'Verification failed. Please try again.';
+        return json({ success: false, error }, 401, req);
+      }
     }
 
     // OTP valid — update password via Supabase Admin API

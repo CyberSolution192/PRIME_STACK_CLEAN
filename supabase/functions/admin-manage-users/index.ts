@@ -10,6 +10,9 @@
  *   - No other logic changed
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requestedDomain, scopeReads } from '../_shared/domain-scope.ts';
+import { partnerAllowed } from '../_shared/partner-access.ts';
+import { sourceDomainFromValue } from '../_shared/source-domain.ts';
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -34,7 +37,7 @@ async function verifyAdmin(_supabase: ReturnType<typeof createClient>, req: Requ
   const userId = req.headers.get("x-admin-user-id");
   const role   = req.headers.get("x-admin-role");
   if (!userId || !role) return { user: null, profile: null };
-  if (!["admin", "superadmin"].includes(role)) return { user: null, profile: null };
+  if (!["admin", "superadmin", "partner"].includes(role)) return { user: null, profile: null };
   return { user: { id: userId }, profile: { role } };
 }
 
@@ -57,7 +60,7 @@ async function auditLog(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
-    const supabase = createClient(
+    let supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
@@ -73,6 +76,19 @@ Deno.serve(async (req) => {
   }
 
   const action = body.action as string;
+  // Admin portal domain filter: read actions only; unknown/"all" = no filter.
+  // Partner accounts: forced to their own domain (from the proxy, which read it from the database),
+  // allowlisted read actions only. Admin/superadmin may pick any domain or All.
+  const isPartner = req.headers.get("x-admin-role") === "partner";
+  const partnerDomain = isPartner ? sourceDomainFromValue(req.headers.get("x-admin-domain")) : undefined;
+  if (isPartner && (!partnerDomain || !partnerAllowed("admin-manage-users", action))) {
+    return json({ success: false, message: "Not permitted for this account" }, 403);
+  }
+  const scopedDomain = isPartner ? partnerDomain : requestedDomain(body);
+  if (isPartner || ["list","get-stats","list-full","get-reseller-profits"].includes(action as string)) {
+    supabase = scopeReads(supabase, scopedDomain, ["users","stores"]);
+  }
+
 
   try {
 
@@ -191,6 +207,17 @@ Deno.serve(async (req) => {
     }
 
     // ── SET CUSTOM BUNDLE PRICES ───────────────────────────────────────────
+    // Partner price actions: the target user must be on the partner's own domain.
+    // `supabase` is domain-scoped for partners, so a user from another domain is simply not found.
+    if (isPartner && ["set-bundle-prices", "get-user-prices", "reset-bundle-price"].includes(action as string)) {
+      const targetId = (body as any).userId;
+      if (typeof targetId !== "string" || !targetId) {
+        return json({ success: false, message: "User ID required" }, 400);
+      }
+      const { data: ownUser } = await supabase.from("users").select("id").eq("id", targetId).maybeSingle();
+      if (!ownUser) return json({ success: false, message: "User not found" }, 404);
+    }
+
     if (action === "set-bundle-prices") {
       const targetUserId = body.userId as string;
       const prices = body.prices as Array<{ bundle_id: string; custom_price: number }>;
@@ -218,6 +245,17 @@ Deno.serve(async (req) => {
       (bundles || []).forEach((b: any) => {
         bundleMap[b.id] = { network: b.network, size: b.size, price: parseFloat(b.price) };
       });
+
+      // Partners can never price below the base price (the platform's supplier cost is covered by it).
+      if (isPartner) {
+        for (const p of prices) {
+          const base = bundleMap[p.bundle_id]?.price;
+          if (base === undefined) return json({ success: false, message: `Bundle not found: ${p.bundle_id}` }, 400);
+          if (p.custom_price < base) {
+            return json({ success: false, message: `Price GH₵${p.custom_price} is below the base price GH₵${base}` }, 400);
+          }
+        }
+      }
 
       const { error: deleteErr } = await supabase
         .from("user_bundle_prices")
@@ -264,7 +302,16 @@ Deno.serve(async (req) => {
         supabase.from("wallets").select("balance"),
       ]);
 
-      const totalBalance = (walletsRes.data || []).reduce(
+      // Wallets have no domain column: when a domain is selected, total only that domain's users.
+      let walletRows: any[] = walletsRes.data || [];
+      if (scopedDomain) {
+        const ids = (usersRes.data || []).map((u: any) => u.id);
+        walletRows = ids.length
+          ? ((await supabase.from("wallets").select("balance").in("user_id", ids)).data || [])
+          : [];
+      }
+
+      const totalBalance = walletRows.reduce(
         (sum: number, w: any) => sum + parseFloat(w.balance || 0), 0
       );
 

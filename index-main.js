@@ -3,7 +3,7 @@
  * ============================================================ */
 
         // Import Supabase client and shared keys
-        import { supabase, PAYSTACK_PUBLIC_KEY } from './supabase-config.js';
+        import { supabase, PAYSTACK_PUBLIC_KEY, paystackRouting } from './supabase-config.js';
 
        // Escape all user and database values before using innerHTML.
         function esc(str) {
@@ -406,12 +406,14 @@
                     // Initialize Paystack with TOTAL amount (including 4% processing charge)
                     const handler = PaystackPop.setup({
                         key: PAYSTACK_PUBLIC_KEY,
+                        ...paystackRouting(),   // per-domain settlement subaccount (off until the key switch)
                         email: email,
                         amount: Math.round(totalAmount * 100), // Paystack uses pesewas (GHS * 100) 
                         currency: 'GHS',
                         ref: reference,       
                          channels: ['mobile_money'],
                         metadata: {
+                            source_domain: location.hostname,   // which domain this payment came from (reporting only)
                             phone: phone,
                             recipient_phone: recipientPhone,
                             recipient: recipientPhone,           // webhook reads 'recipient'

@@ -26,14 +26,19 @@
 
 import { serve }        from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { sourceDomainFromRequest } from '../_shared/source-domain.ts';
+import { checkSubaccountRouting } from '../_shared/paystack-routing.ts';
 
 const SUPABASE_URL              = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const PAYSTACK_SECRET_KEY       = Deno.env.get('PAYSTACK_SECRET_KEY')!;
 
 // [1] Explicit origin whitelist — replaces the previous wildcard *
+const IS_PRODUCTION = Deno.env.get("ENVIRONMENT") === "production";
+
 const ALLOWED_ORIGINS = new Set([
   'https://primeconnect.site',
+  'https://www.richsondatahub.store',
   // Remove before final production launch:
   'http://127.0.0.1:5500',
   'http://127.0.0.1:5501',
@@ -41,9 +46,14 @@ const ALLOWED_ORIGINS = new Set([
   'http://localhost:5501',
 ]);
 
+const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost):55\d\d$/;
+
 function getAllowedOrigin(req: Request): string {
   const origin = req.headers.get('Origin') ?? '';
-  return ALLOWED_ORIGINS.has(origin) ? origin : 'https://no-cors-for-you';
+  if (ALLOWED_ORIGINS.has(origin)) return origin;
+  // Local development on Live Server ports 5500-5599, never in production.
+  if (!IS_PRODUCTION && LOCAL_DEV_ORIGIN_RE.test(origin)) return origin;
+  return 'https://no-cors-for-you';
 }
 
 function jsonResponse(body: unknown, status = 200, req?: Request): Response {
@@ -117,6 +127,7 @@ serve(async (req: Request) => {
     const { error: claimError } = await supabase
       .from('paystack_verifications')
       .insert({
+      source_domain: sourceDomainFromRequest(req),
         user_id:                   user.id,
         reference,
         status:                    'pending',
@@ -165,6 +176,8 @@ serve(async (req: Request) => {
     // [2] Amount comes from Paystack's verified response only.
     // The DB function also extracts this independently from p_paystack_data
     // as a second layer — neither layer trusts the client for the amount.
+    await checkSubaccountRouting(supabase, verifyData.data, sourceDomainFromRequest(req));
+
     const paystackAmountGHS = verifyData.data.amount / 100;
 
     console.log(`Paystack confirmed: GH₵${paystackAmountGHS} for ref: ${reference}`);
